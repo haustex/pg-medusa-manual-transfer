@@ -1,64 +1,135 @@
-<p align="center">
-  <a href="https://www.medusajs.com">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/59018053/229103275-b5e482bb-4601-46e6-8142-244f531cebdb.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://user-images.githubusercontent.com/59018053/229103726-e5b529a3-9b3f-4970-8a1f-c6af37f087bf.svg">
-    <img alt="Medusa logo" src="https://user-images.githubusercontent.com/59018053/229103726-e5b529a3-9b3f-4970-8a1f-c6af37f087bf.svg">
-    </picture>
-  </a>
-</p>
-<h1 align="center">
-  Medusa Plugin Starter
-</h1>
+# PG Medusa Transfer Manual by Haus Kayu
 
-<h4 align="center">
-  <a href="https://docs.medusajs.com">Documentation</a> |
-  <a href="https://www.medusajs.com">Website</a>
-</h4>
+Manual bank transfer with payment-proof upload and admin verification for Medusa v2.
 
-<p align="center">
-  Building blocks for digital commerce
-</p>
-<p align="center">
-  <a href="https://github.com/medusajs/medusa/blob/master/CONTRIBUTING.md">
-    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs welcome!" />
-  </a>
-    <a href="https://www.producthunt.com/posts/medusa"><img src="https://img.shields.io/badge/Product%20Hunt-%231%20Product%20of%20the%20Day-%23DA552E" alt="Product Hunt"></a>
-  <a href="https://discord.gg/xpCwq3Kfn8">
-    <img src="https://img.shields.io/badge/chat-on%20discord-7289DA.svg" alt="Discord Chat" />
-  </a>
-  <a href="https://twitter.com/intent/follow?screen_name=medusajs">
-    <img src="https://img.shields.io/twitter/follow/medusajs.svg?label=Follow%20@medusajs" alt="Follow @medusajs" />
-  </a>
-</p>
+> Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
-## Compatibility
+**Status:** in development (phase 1 of 6: payment provider and bank accounts). Coming soon to hauskayu.com.
 
-This starter is compatible with versions >= 2.4.0 of `@medusajs/medusa`. 
+[English](#english) · [Bahasa Indonesia](#bahasa-indonesia)
 
-## Getting Started
+---
 
-Visit the [Quickstart Guide](https://docs.medusajs.com/learn/installation) to set up a server.
+## English
 
-Visit the [Plugins documentation](https://docs.medusajs.com/learn/fundamentals/plugins) to learn more about plugins and how to create them.
+### What it does (so far)
 
-Visit the [Docs](https://docs.medusajs.com/learn/installation#get-started) to learn more about our system requirements.
+- **Bank accounts managed in the Admin** (Settings → Manual transfer): bank name, account holder, account
+  number, SWIFT/BIC, bank address, currency, regions, active/inactive, order. Several accounts can be active; the
+  first active one matching the cart's currency and region is used.
+- **Placing the order authorizes the payment**: Medusa creates the order and reserves stock, the payment waits for
+  the buyer's transfer (`awaiting_payment`).
+- **Unique payment reference per order**, e.g. `MT-7K3QX-9PA2B`, with a check character that catches typos.
+- **Payment deadline** in business days (default 3), counted in your time zone and skipping your holidays.
+- **Capture only through admin confirmation**: Medusa's own "Capture" button is refused. An admin confirms the
+  transfer (amount received, date, bank reference) after checking the bank statement, and only then is the payment
+  captured.
+- The account details are **copied into each order** when it is placed, so later edits only apply to new orders.
 
-## What is Medusa
+Payment-proof upload, the verification tab, reminders, auto-cancel, e-mails, invoices and storefront pages follow in
+later phases.
 
-Medusa is a set of commerce modules and tools that allow you to build rich, reliable, and performant commerce applications without reinventing core commerce logic. The modules can be customized and used to build advanced ecommerce stores, marketplaces, or any product that needs foundational commerce primitives. All modules are open-source and freely available on npm.
+### Install
 
-Learn more about [Medusa’s architecture](https://docs.medusajs.com/learn/introduction/architecture) and [commerce modules](https://docs.medusajs.com/learn/fundamentals/modules/commerce-modules) in the Docs.
+```bash
+npm install medusa-payment-manual-transfer
+```
 
-## Community & Contributions
+`medusa-config.ts`:
 
-The community and core team are available in [GitHub Discussions](https://github.com/medusajs/medusa/discussions), where you can ask for support, discuss roadmap, and share ideas.
+```ts
+module.exports = defineConfig({
+  // …
+  plugins: [{ resolve: "medusa-payment-manual-transfer", options: {} }],
+  modules: [
+    {
+      resolve: "@medusajs/medusa/payment",
+      options: {
+        providers: [
+          {
+            resolve: "medusa-payment-manual-transfer/providers/manual-transfer",
+            id: "manual-transfer",
+            options: {
+              referencePrefix: "MT",       // 1–6 of A–Z/0–9
+              deadlineBusinessDays: 3,     // 1–60
+              timezone: "Asia/Jakarta",    // IANA zone business days are counted in (default UTC)
+              holidays: ["2026-12-25"],    // YYYY-MM-DD, skipped when counting
+            },
+          },
+        ],
+      },
+    },
+  ],
+})
+```
 
-Join our [Discord server](https://discord.com/invite/medusajs) to meet other community members.
+Then run `npx medusa db:migrate`, enable the `pp_manual-transfer_manual-transfer` provider on your regions, and add
+your bank account in **Settings → Manual transfer**.
 
-## Other channels
+### Admin API
 
-- [GitHub Issues](https://github.com/medusajs/medusa/issues)
-- [Twitter](https://twitter.com/medusajs)
-- [LinkedIn](https://www.linkedin.com/company/medusajs)
-- [Medusa Blog](https://medusajs.com/blog/)
+| Method | Path | |
+| --- | --- | --- |
+| GET / POST | `/admin/manual-transfer/accounts` | list / create accounts |
+| GET / POST / DELETE | `/admin/manual-transfer/accounts/:id` | read / update / delete an account |
+| POST | `/admin/manual-transfer/payments/:id/confirm` | confirm a transfer and capture the payment |
+
+`confirm` takes `{ amount_received, received_at: "YYYY-MM-DD", bank_reference?, note?, accept_shortfall? }`. It is
+refused when less than the amount due arrived, unless `accept_shortfall` is `true`.
+
+**Always check the bank statement in your banking app before confirming. Never rely on a proof image alone.**
+
+### Payment data
+
+`payment.data` (and the payment session's data) holds `reference`, `account` (the copied account details),
+`amount`, `currency_code`, `status` (`awaiting_payment`, `awaiting_verification`, `paid`, `underpaid`, `rejected`,
+`expired`, `canceled`), `authorized_at`, `expires_at` and, once confirmed, `confirmation`. The provider rebuilds it
+from these keys at every step, so data a storefront sends when creating the session is ignored.
+
+---
+
+## Bahasa Indonesia
+
+### Fitur (sejauh ini)
+
+- **Rekening bank dikelola dari Admin** (Settings → Manual transfer): nama bank, nama penerima, nomor rekening,
+  SWIFT/BIC, alamat bank, mata uang, region, aktif/nonaktif, urutan. Rekening aktif pertama yang cocok dengan mata
+  uang dan region keranjang yang dipakai.
+- **Order dibuat saat checkout**: pembayaran di-authorize sehingga order tercipta dan stok ditahan, status
+  menunggu pembayaran (`awaiting_payment`).
+- **Kode referensi unik per order**, mis. `MT-7K3QX-9PA2B`, dengan karakter cek untuk menangkap salah ketik.
+- **Batas waktu pembayaran** dalam hari kerja (default 3), dihitung di zona waktu toko dan melewati hari libur.
+- **Capture hanya lewat konfirmasi admin**: tombol "Capture" bawaan Medusa ditolak. Admin mengonfirmasi transfer
+  (nominal diterima, tanggal, ref bank) setelah mengecek mutasi, baru pembayaran di-capture.
+- Detail rekening **disalin ke setiap order**, jadi perubahan rekening hanya berlaku untuk order baru.
+
+Upload bukti, tab verifikasi, pengingat, auto-cancel, email, invoice, dan halaman storefront menyusul di fase
+berikutnya. Konfigurasi sama dengan bagian English di atas.
+
+**Selalu cek mutasi di aplikasi bank sebelum konfirmasi, jangan hanya percaya bukti transfer.**
+
+---
+
+## Kenapa kami membuatnya
+
+Haus Kayu menjual perkakas dan furnitur jati dari Jepara ke pembeli di AS. Untuk custom furniture dan order besar,
+pembeli lebih nyaman transfer langsung ke rekening USD kami daripada membayar dengan kartu.
+
+## Plugin lain dari Haus Kayu
+
+- **PG Medusa Doit.id**: [github.com/haustex/pg-medusa-doit](https://github.com/haustex/pg-medusa-doit), npm
+  `medusa-payment-doit`
+
+## About Haus Kayu
+
+[Haus Kayu](https://hauskayu.com/?utm_source=github&utm_medium=readme&utm_campaign=pg-medusa-manual-transfer):
+teak tools and furniture from Jepara, Indonesia.
+
+## Support
+
+- E-mail: [dev@hauskayu.com](mailto:dev@hauskayu.com)
+- WhatsApp: [chat with us](https://wa.me/6285111663330?text=Halo%20Haus%20Kayu%2C%20saya%20mau%20tanya%20soal%20PG%20Medusa%20Transfer%20Manual)
+
+## License
+
+MIT © Haus Kayu

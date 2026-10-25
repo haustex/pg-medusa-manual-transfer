@@ -1,0 +1,53 @@
+{
+  "manualTransfer": {
+    "settings": {
+      "label": "Manual transfer",
+      "title": "Bank accounts",
+      "description": "Accounts buyers transfer to. Each order keeps a copy of the account it was placed with, so edits only apply to new orders.",
+      "add": "Add account",
+      "empty": "No bank accounts yet. Add one so buyers can pay by transfer.",
+      "loadError": "Could not load the bank accounts."
+    },
+    "account": {
+      "label": "Internal name",
+      "labelHint": "Only visible in the Admin, e.g. \"USD pocket\"",
+      "bankName": "Bank name",
+      "accountHolder": "Account holder",
+      "accountNumber": "Account number",
+      "swiftCode": "SWIFT / BIC",
+      "swiftHint": "8 or 11 characters, e.g. JAGBIDJA",
+      "bankAddress": "Bank address",
+      "currency": "Currency",
+      "currencyHint": "ISO 4217 code, e.g. USD",
+      "regions": "Regions",
+      "regionsHint": "Leave all unticked to offer this account in every region with its currency.",
+      "allRegions": "All regions",
+      "rank": "Order",
+      "rankHint": "When several accounts match, the lowest number is used.",
+      "active": "Active",
+      "activeHint": "Inactive accounts are not offered for new orders.",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "edit": "Edit",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "delete": "Delete",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "titles": {
+      "create": "Add bank account",
+      "edit": "Edit bank account"
+    },
+    "confirmDelete": {
+      "title": "Delete this bank account?",
+      "description": "{{name}} will no longer be offered. Existing orders keep their payment instructions."
+    },
+    "toasts": {
+      "created": "Bank account added",
+      "updated": "Bank account saved",
+      "deleted": "Bank account deleted"
+    }
+  }
+}

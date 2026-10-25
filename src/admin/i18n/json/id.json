@@ -1,0 +1,53 @@
+{
+  "manualTransfer": {
+    "settings": {
+      "label": "Transfer manual",
+      "title": "Rekening bank",
+      "description": "Rekening tujuan transfer pembeli. Setiap order menyimpan salinan rekening saat order dibuat, jadi perubahan hanya berlaku untuk order baru.",
+      "add": "Tambah rekening",
+      "empty": "Belum ada rekening. Tambahkan agar pembeli bisa membayar lewat transfer.",
+      "loadError": "Gagal memuat daftar rekening."
+    },
+    "account": {
+      "label": "Nama internal",
+      "labelHint": "Hanya terlihat di Admin, mis. \"Kantong USD\"",
+      "bankName": "Nama bank",
+      "accountHolder": "Nama penerima",
+      "accountNumber": "Nomor rekening",
+      "swiftCode": "SWIFT / BIC",
+      "swiftHint": "8 atau 11 karakter, mis. JAGBIDJA",
+      "bankAddress": "Alamat bank",
+      "currency": "Mata uang",
+      "currencyHint": "Kode ISO 4217, mis. USD",
+      "regions": "Region",
+      "regionsHint": "Biarkan semua tidak dicentang agar rekening ditawarkan di semua region dengan mata uang ini.",
+      "allRegions": "Semua region",
+      "rank": "Urutan",
+      "rankHint": "Jika beberapa rekening cocok, angka terkecil yang dipakai.",
+      "active": "Aktif",
+      "activeHint": "Rekening nonaktif tidak ditawarkan untuk order baru.",
+      "inactive": "Nonaktif"
+    },
+    "actions": {
+      "edit": "Ubah",
+      "activate": "Aktifkan",
+      "deactivate": "Nonaktifkan",
+      "delete": "Hapus",
+      "save": "Simpan",
+      "cancel": "Batal"
+    },
+    "titles": {
+      "create": "Tambah rekening",
+      "edit": "Ubah rekening"
+    },
+    "confirmDelete": {
+      "title": "Hapus rekening ini?",
+      "description": "{{name}} tidak akan ditawarkan lagi. Order yang sudah ada tetap memakai instruksi pembayarannya."
+    },
+    "toasts": {
+      "created": "Rekening ditambahkan",
+      "updated": "Rekening disimpan",
+      "deleted": "Rekening dihapus"
+    }
+  }
+}

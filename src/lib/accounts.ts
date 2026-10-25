@@ -69,6 +69,31 @@ export async function listActiveAccounts(
 }
 
 /**
+ * Region of the cart (or order) a payment session belongs to, read through the
+ * same connection. The storefront may also send a region_id in the session
+ * data, but that is buyer input; this lookup is what the provider trusts.
+ * Returns null when the session is not linked to a cart or order.
+ */
+export async function findSessionRegionId(pg: Knex, sessionId: string): Promise<string | null> {
+  const viaCart = await pg("payment_session as ps")
+    .join("cart_payment_collection as cpc", "cpc.payment_collection_id", "ps.payment_collection_id")
+    .join("cart as c", "c.id", "cpc.cart_id")
+    .where("ps.id", sessionId)
+    .whereNull("cpc.deleted_at")
+    .first("c.region_id")
+  if (viaCart?.region_id) {
+    return viaCart.region_id
+  }
+  const viaOrder = await pg("payment_session as ps")
+    .join("order_payment_collection as opc", "opc.payment_collection_id", "ps.payment_collection_id")
+    .join("order as o", "o.id", "opc.order_id")
+    .where("ps.id", sessionId)
+    .whereNull("opc.deleted_at")
+    .first("o.region_id")
+  return viaOrder?.region_id ?? null
+}
+
+/**
  * Picks the account for a session: the requested one if it matches, otherwise
  * the first account offered in the region (accounts without regions are
  * offered everywhere).

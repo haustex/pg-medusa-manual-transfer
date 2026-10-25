@@ -3,6 +3,7 @@ import {
   PostAdminCreateAccount,
   PostAdminUpdateAccount,
 } from "./admin/manual-transfer/accounts/validators"
+import { PostAdminConfirmPayment } from "./admin/manual-transfer/payments/validators"
 
 export default defineMiddlewares({
   routes: [
@@ -15,6 +16,11 @@ export default defineMiddlewares({
       matcher: "/admin/manual-transfer/accounts/:id",
       method: "POST",
       middlewares: [validateAndTransformBody(PostAdminUpdateAccount)],
+    },
+    {
+      matcher: "/admin/manual-transfer/payments/:id/confirm",
+      method: "POST",
+      middlewares: [validateAndTransformBody(PostAdminConfirmPayment)],
     },
   ],
 })

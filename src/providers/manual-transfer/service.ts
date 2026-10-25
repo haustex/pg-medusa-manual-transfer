@@ -2,6 +2,7 @@ import type { Knex } from "@medusajs/framework/mikro-orm/knex"
 import type {
   AuthorizePaymentInput,
   AuthorizePaymentOutput,
+  BigNumberInput,
   CancelPaymentInput,
   CancelPaymentOutput,
   CapturePaymentInput,
@@ -24,35 +25,116 @@ import type {
 } from "@medusajs/framework/types"
 import {
   AbstractPaymentProvider,
+  BigNumber,
   ContainerRegistrationKeys,
   MedusaError,
   PaymentActions,
 } from "@medusajs/framework/utils"
-import { randomUUID } from "node:crypto"
-import { listActiveAccounts, pickAccount, snapshotAccount } from "../../lib/accounts"
+import {
+  AccountRow,
+  findSessionRegionId,
+  listActiveAccounts,
+  pickAccount,
+  snapshotAccount,
+} from "../../lib/accounts"
+import {
+  addBusinessDays,
+  DEFAULT_DEADLINE_BUSINESS_DAYS,
+  DEFAULT_TIMEZONE,
+  isValidHoliday,
+  isValidTimezone,
+} from "../../lib/deadline"
+import {
+  MANUAL_TRANSFER_STATUS,
+  ManualTransferPaymentData,
+  pickPaymentData,
+  toSessionStatus,
+} from "../../lib/payment-data"
+import {
+  DEFAULT_REFERENCE_PREFIX,
+  generateReference,
+  isValidReferencePrefix,
+  parseReference,
+} from "../../lib/reference"
 
 type InjectedDependencies = {
   logger: Logger
   [ContainerRegistrationKeys.PG_CONNECTION]?: Knex
 }
 
-export type ManualTransferProviderOptions = Record<string, never>
+export type ManualTransferProviderOptions = {
+  /** Prefix of the payment reference, 1–6 of A–Z/0–9. Default "MT" (MT-7K3QX-9PA2B). */
+  referencePrefix?: string
+  /** Business days the buyer has to pay after placing the order. Default 3. */
+  deadlineBusinessDays?: number
+  /** IANA time zone business days are counted in, e.g. "Asia/Jakarta". Default "UTC". */
+  timezone?: string
+  /** Non-working days (YYYY-MM-DD in `timezone`) skipped when counting. */
+  holidays?: string[]
+}
 
-const NOT_IMPLEMENTED = "manual transfer provider: implemented in phase 1"
+/** Session data keys carried from one step to the next; everything else is rebuilt */
+const SESSION_KEYS = ["reference", "account", "amount", "currency_code", "region_id", "session_id"] as const
+
+const CAPTURE_ONLY_BY_ADMIN =
+  "Manual transfer payments are captured only by confirming them in the manual transfer panel, " +
+  "after the money is visible in the bank statement."
+
+function toNumber(amount: BigNumberInput): number {
+  return new BigNumber(amount).numeric
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.length ? value : null
+}
 
 class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransferProviderOptions> {
   static identifier = "manual-transfer"
 
   protected logger_: Logger
   protected pg_: Knex | undefined
+  protected options_: Required<ManualTransferProviderOptions>
 
-  constructor(container: InjectedDependencies, options: ManualTransferProviderOptions) {
+  static validateOptions(options: Record<string, unknown>): void {
+    const { referencePrefix, deadlineBusinessDays, timezone, holidays } =
+      (options ?? {}) as ManualTransferProviderOptions
+    const problems: string[] = []
+    if (referencePrefix !== undefined && !isValidReferencePrefix(referencePrefix)) {
+      problems.push("referencePrefix must be 1-6 characters A-Z or 0-9")
+    }
+    if (
+      deadlineBusinessDays !== undefined &&
+      !(Number.isInteger(deadlineBusinessDays) && deadlineBusinessDays >= 1 && deadlineBusinessDays <= 60)
+    ) {
+      problems.push("deadlineBusinessDays must be a whole number from 1 to 60")
+    }
+    if (timezone !== undefined && !isValidTimezone(timezone)) {
+      problems.push(`timezone "${timezone}" is not an IANA time zone`)
+    }
+    if (holidays !== undefined && !(Array.isArray(holidays) && holidays.every(isValidHoliday))) {
+      problems.push("holidays must be a list of YYYY-MM-DD dates")
+    }
+    if (problems.length) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `manual-transfer provider options: ${problems.join("; ")}`
+      )
+    }
+  }
+
+  constructor(container: InjectedDependencies, options: ManualTransferProviderOptions = {}) {
     super(container, options)
     this.logger_ = container.logger
     try {
       this.pg_ = container[ContainerRegistrationKeys.PG_CONNECTION]
     } catch {
       this.pg_ = undefined
+    }
+    this.options_ = {
+      referencePrefix: options.referencePrefix ?? DEFAULT_REFERENCE_PREFIX,
+      deadlineBusinessDays: options.deadlineBusinessDays ?? DEFAULT_DEADLINE_BUSINESS_DAYS,
+      timezone: options.timezone ?? DEFAULT_TIMEZONE,
+      holidays: options.holidays ?? [],
     }
   }
 
@@ -66,44 +148,150 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
     return this.pg_
   }
 
-  async initiatePayment(input: InitiatePaymentInput): Promise<InitiatePaymentOutput> {
-    const data = (input.data ?? {}) as Record<string, unknown>
-    const rows = await listActiveAccounts(this.db(), input.currency_code)
-    const account = pickAccount(rows, {
-      regionId: typeof data.region_id === "string" ? data.region_id : null,
-      accountId: typeof data.account_id === "string" ? data.account_id : null,
-    })
+  /** The region the session's cart or order is in, falling back to the storefront's hint */
+  protected async resolveRegionId(data: Record<string, unknown>): Promise<string | null> {
+    const sessionId = asString(data.session_id)
+    const regionId = sessionId ? await findSessionRegionId(this.db(), sessionId) : null
+    return regionId ?? asString(data.region_id)
+  }
+
+  protected async chooseAccount(
+    currencyCode: string,
+    regionId: string | null,
+    accountId: string | null
+  ): Promise<AccountRow> {
+    const rows = await listActiveAccounts(this.db(), currencyCode)
+    const account = pickAccount(rows, { regionId, accountId })
     if (!account) {
       throw new MedusaError(
         MedusaError.Types.NOT_ALLOWED,
-        `No active bank account for currency ${input.currency_code.toUpperCase()}`
+        `No active bank account for currency ${currencyCode.toUpperCase()}`
       )
     }
+    return account
+  }
+
+  async initiatePayment(input: InitiatePaymentInput): Promise<InitiatePaymentOutput> {
+    const data = (input.data ?? {}) as Record<string, unknown>
+    const regionId = await this.resolveRegionId(data)
+    const account = await this.chooseAccount(input.currency_code, regionId, asString(data.account_id))
+    const reference = generateReference(this.options_.referencePrefix)
+    const sessionData: ManualTransferPaymentData = {
+      reference,
+      account: snapshotAccount(account),
+      amount: toNumber(input.amount),
+      currency_code: input.currency_code.toLowerCase(),
+      region_id: regionId,
+      status: MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
+      ...(asString(data.session_id) ? { session_id: data.session_id as string } : {}),
+    }
+    return { id: reference, data: sessionData, status: "pending" }
+  }
+
+  async updatePayment(input: UpdatePaymentInput): Promise<UpdatePaymentOutput> {
+    const current = pickPaymentData(input.data, SESSION_KEYS)
+    const currencyCode = input.currency_code.toLowerCase()
+    let account = current.account
+    if (!account || account.currency_code !== currencyCode) {
+      account = snapshotAccount(
+        await this.chooseAccount(currencyCode, current.region_id ?? null, null)
+      )
+    }
+    const reference =
+      (current.reference && parseReference(current.reference)) ||
+      generateReference(this.options_.referencePrefix)
+    const data: ManualTransferPaymentData = {
+      ...current,
+      reference,
+      account,
+      amount: toNumber(input.amount),
+      currency_code: currencyCode,
+      region_id: current.region_id ?? null,
+      status: MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
+    }
+    return { data, status: "pending" }
+  }
+
+  /**
+   * Placing the order: the payment is authorized right away so Medusa creates
+   * the order and reserves stock, while the money is still on its way. The
+   * account details are re-read here and frozen for this order, and the
+   * payment deadline starts.
+   */
+  async authorizePayment(input: AuthorizePaymentInput): Promise<AuthorizePaymentOutput> {
+    const session = pickPaymentData(input.data, SESSION_KEYS)
+    const reference = session.reference && parseReference(session.reference)
+    if (!reference || !session.account || !session.currency_code || session.amount === undefined) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "manual transfer session is incomplete; select the payment method again"
+      )
+    }
+    // The account may have been edited or deactivated since checkout started
+    const account = await this.chooseAccount(
+      session.currency_code,
+      session.region_id ?? null,
+      session.account.id
+    )
+    const now = new Date()
+    const expiresAt = addBusinessDays(now, this.options_.deadlineBusinessDays, this.options_)
+    const data: ManualTransferPaymentData = {
+      ...session,
+      reference,
+      account: snapshotAccount(account),
+      amount: session.amount,
+      currency_code: session.currency_code,
+      region_id: session.region_id ?? null,
+      status: MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
+      authorized_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    }
+    return { status: "authorized", data }
+  }
+
+  /**
+   * Medusa's own "Capture" button lands here too. It is refused unless an
+   * admin confirmed the transfer through this plugin, which marks the payment
+   * data as paid before capturing.
+   */
+  async capturePayment(input: CapturePaymentInput): Promise<CapturePaymentOutput> {
+    const data = pickPaymentData(input.data)
+    if (data.status !== MANUAL_TRANSFER_STATUS.PAID || !data.confirmation) {
+      throw new MedusaError(MedusaError.Types.NOT_ALLOWED, CAPTURE_ONLY_BY_ADMIN)
+    }
+    return { data: input.data }
+  }
+
+  /** Records the refund; the money itself is sent back by hand from the bank */
+  async refundPayment(input: RefundPaymentInput): Promise<RefundPaymentOutput> {
+    const data = (input.data ?? {}) as Record<string, unknown>
+    const refunds = Array.isArray(data.refunds) ? data.refunds : []
     return {
-      id: `mt_${randomUUID()}`,
       data: {
-        account: snapshotAccount(account),
-        amount: input.amount,
-        currency_code: input.currency_code,
-        status: "awaiting_payment",
+        ...data,
+        refunds: [...refunds, { amount: toNumber(input.amount), refunded_at: new Date().toISOString() }],
       },
     }
   }
 
-  async authorizePayment(_input: AuthorizePaymentInput): Promise<AuthorizePaymentOutput> {
-    throw new MedusaError(MedusaError.Types.NOT_ALLOWED, NOT_IMPLEMENTED)
-  }
-
-  async capturePayment(_input: CapturePaymentInput): Promise<CapturePaymentOutput> {
-    throw new MedusaError(MedusaError.Types.NOT_ALLOWED, NOT_IMPLEMENTED)
-  }
-
-  async refundPayment(_input: RefundPaymentInput): Promise<RefundPaymentOutput> {
-    throw new MedusaError(MedusaError.Types.NOT_ALLOWED, NOT_IMPLEMENTED)
-  }
-
   async cancelPayment(input: CancelPaymentInput): Promise<CancelPaymentOutput> {
-    return { data: input.data }
+    const data = (input.data ?? {}) as Record<string, unknown>
+    if (data.status === MANUAL_TRANSFER_STATUS.PAID) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "This manual transfer is already paid; refund it instead of canceling."
+      )
+    }
+    return {
+      data: {
+        ...data,
+        status:
+          data.status === MANUAL_TRANSFER_STATUS.EXPIRED
+            ? MANUAL_TRANSFER_STATUS.EXPIRED
+            : MANUAL_TRANSFER_STATUS.CANCELED,
+        canceled_at: new Date().toISOString(),
+      },
+    }
   }
 
   async deletePayment(input: DeletePaymentInput): Promise<DeletePaymentOutput> {
@@ -114,12 +302,8 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
     return { data: input.data }
   }
 
-  async updatePayment(input: UpdatePaymentInput): Promise<UpdatePaymentOutput> {
-    return { data: input.data }
-  }
-
-  async getPaymentStatus(_input: GetPaymentStatusInput): Promise<GetPaymentStatusOutput> {
-    return { status: "pending" }
+  async getPaymentStatus(input: GetPaymentStatusInput): Promise<GetPaymentStatusOutput> {
+    return { status: toSessionStatus(pickPaymentData(input.data)), data: input.data }
   }
 
   async getWebhookActionAndData(

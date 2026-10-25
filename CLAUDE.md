@@ -32,6 +32,19 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   instruksi order yang sudah ada. Snapshot tidak memuat `label`/`rank` internal.
 - Nama key di `MedusaService({ ManualTransferAccount })` harus sama dengan nama model
   (`manual_transfer_account`), kalau tidak `query.graph` gagal (`listManualTransferAccounts` tidak ada).
+- **Data payment dibangun ulang dari key whitelist** (`src/lib/payment-data.ts`) di setiap langkah provider: Medusa
+  menyimpan `{...data dari storefront, ...data provider}` di session, jadi key palsu (mis. `confirmation`,
+  `status: "paid"`) dari storefront harus dibuang di `authorizePayment`. Region diambil dari cart/order lewat
+  `payment_session → cart_payment_collection → cart` (fallback `order_payment_collection`), bukan dari input pembeli.
+- **Authorize = status `authorized`** (order + reservasi stok dibuat Medusa); status domain ada di
+  `payment.data.status`. `capturePayment` menolak kecuali `data.status === "paid"` dan ada `data.confirmation`, yang
+  hanya ditulis workflow `confirm-manual-transfer-payment` (lalu `capturePaymentWorkflow.runAsStep`, kompensasi
+  mengembalikan data). `UpdatePaymentDTO` hanya mendeklarasikan `id`, tapi `updatePayment` meneruskan `data` ke repo.
+- Akun di-snapshot ulang saat authorize (edit/nonaktif sebelum order dibuat ikut terbaca); setelah itu beku.
+- Referensi: Crockford base32, 9 acak + 1 cek Luhn mod 32 (`src/lib/reference.ts`). Tenggat: hari kerja di
+  `timezone` opsi provider, time-of-day dipertahankan (`src/lib/deadline.ts`).
+- Fase 1 diuji E2E dengan app sementara (DB `mt_phase1` di mt-spike-pg, port 9400/9401): 33/33 cek di mode shared
+  dan split.
 - Id workflow/step memakai prefix `manual-transfer-` agar tidak bentrok dengan plugin lain (lint mewajibkan
   id = nama export/file).
 
