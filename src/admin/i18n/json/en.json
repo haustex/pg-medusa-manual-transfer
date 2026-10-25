@@ -48,6 +48,47 @@
       "created": "Bank account added",
       "updated": "Bank account saved",
       "deleted": "Bank account deleted"
+    },
+    "widget": {
+      "title": "Manual transfer",
+      "reference": "Reference",
+      "amount": "Amount due",
+      "deadline": "Pay by",
+      "account": "Bank account",
+      "history": "History",
+      "noHistory": "No history yet.",
+      "substituted": "Account substituted",
+      "substitutedText": "The account chosen at checkout ({{from}}) was not available when the order was placed, so the buyer was given {{to}}. Check that the transfer goes to this account.",
+      "loadError": "Could not load the manual transfer payment.",
+      "substitutedShort": "{{from}} → {{to}} ({{reason}})",
+      "reason": {
+        "inactive_or_deleted": "account inactive or deleted",
+        "not_offered_in_region": "account not offered in this region"
+      }
+    },
+    "status": {
+      "awaiting_payment": "Awaiting payment",
+      "awaiting_verification": "Awaiting verification",
+      "paid": "Paid",
+      "underpaid": "Underpaid",
+      "rejected": "Rejected",
+      "expired": "Expired",
+      "canceled": "Canceled"
+    },
+    "history": {
+      "authorized": "Order placed, awaiting payment",
+      "account_substituted": "Account substituted",
+      "proof_uploaded": "Payment proof uploaded",
+      "proof_rejected": "Payment proof rejected",
+      "confirmed": "Payment confirmed",
+      "canceled": "Payment canceled",
+      "refunded": "Refund recorded"
+    },
+    "actor": {
+      "system": "System",
+      "customer": "Customer",
+      "guest": "Guest",
+      "user": "Admin"
     }
   }
 }

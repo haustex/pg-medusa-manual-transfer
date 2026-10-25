@@ -19,7 +19,10 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
   first active one matching the cart's currency and region is used.
 - **Placing the order authorizes the payment**: Medusa creates the order and reserves stock, the payment waits for
   the buyer's transfer (`awaiting_payment`).
-- **Unique payment reference per order**, e.g. `MT-7K3QX-9PA2B`, with a check character that catches typos.
+- **Unique payment reference per order**, e.g. `MT-7K3QX-9PA2B`, guaranteed unique by a database index, with a
+  check character that catches typos.
+- **Payment history** on the order page (Admin widget), including a warning when the account chosen at checkout
+  was deactivated before the order was placed and another account was given to the buyer.
 - **Payment deadline** in business days (default 3), counted in your time zone and skipping your holidays.
 - **Capture only through admin confirmation**: Medusa's own "Capture" button is refused. An admin confirms the
   transfer (amount received, date, bank reference) after checking the bank statement, and only then is the payment
@@ -72,6 +75,7 @@ your bank account in **Settings → Manual transfer**.
 | --- | --- | --- |
 | GET / POST | `/admin/manual-transfer/accounts` | list / create accounts |
 | GET / POST / DELETE | `/admin/manual-transfer/accounts/:id` | read / update / delete an account |
+| GET | `/admin/manual-transfer/orders/:id` | the order's manual-transfer payment and its history |
 | POST | `/admin/manual-transfer/payments/:id/confirm` | confirm a transfer and capture the payment |
 
 `confirm` takes `{ amount_received, received_at: "YYYY-MM-DD", bank_reference?, note?, accept_shortfall? }`. It is
@@ -83,7 +87,7 @@ refused when less than the amount due arrived, unless `accept_shortfall` is `tru
 
 `payment.data` (and the payment session's data) holds `reference`, `account` (the copied account details),
 `amount`, `currency_code`, `status` (`awaiting_payment`, `awaiting_verification`, `paid`, `underpaid`, `rejected`,
-`expired`, `canceled`), `authorized_at`, `expires_at` and, once confirmed, `confirmation`. The provider rebuilds it
+`expired`, `canceled`), `authorized_at`, `expires_at`, `history` and, once confirmed, `confirmation`. The provider rebuilds it
 from these keys at every step, so data a storefront sends when creating the session is ignored.
 
 ---
@@ -97,7 +101,10 @@ from these keys at every step, so data a storefront sends when creating the sess
   uang dan region keranjang yang dipakai.
 - **Order dibuat saat checkout**: pembayaran di-authorize sehingga order tercipta dan stok ditahan, status
   menunggu pembayaran (`awaiting_payment`).
-- **Kode referensi unik per order**, mis. `MT-7K3QX-9PA2B`, dengan karakter cek untuk menangkap salah ketik.
+- **Kode referensi unik per order**, mis. `MT-7K3QX-9PA2B`, dijamin unik oleh index database, dengan karakter cek
+  untuk menangkap salah ketik.
+- **Riwayat pembayaran** di halaman order (widget Admin), termasuk peringatan kalau rekening pilihan saat checkout
+  dinonaktifkan sebelum order dibuat dan pembeli diberi rekening lain.
 - **Batas waktu pembayaran** dalam hari kerja (default 3), dihitung di zona waktu toko dan melewati hari libur.
 - **Capture hanya lewat konfirmasi admin**: tombol "Capture" bawaan Medusa ditolak. Admin mengonfirmasi transfer
   (nominal diterima, tanggal, ref bank) setelah mengecek mutasi, baru pembayaran di-capture.

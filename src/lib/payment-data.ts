@@ -50,6 +50,58 @@ export type ManualTransferRefund = {
   refunded_at: string
 }
 
+export const HISTORY_EVENT = {
+  AUTHORIZED: "authorized",
+  /** The account picked at checkout was no longer available; another one was used */
+  ACCOUNT_SUBSTITUTED: "account_substituted",
+  PROOF_UPLOADED: "proof_uploaded",
+  PROOF_REJECTED: "proof_rejected",
+  CONFIRMED: "confirmed",
+  CANCELED: "canceled",
+  REFUNDED: "refunded",
+} as const
+
+export type ManualTransferHistoryEvent = (typeof HISTORY_EVENT)[keyof typeof HISTORY_EVENT]
+
+export type ManualTransferHistoryEntry = {
+  event: ManualTransferHistoryEvent
+  at: string
+  /** Who did it: the provider/system, the buyer, or an admin user */
+  actor_type: "system" | "customer" | "guest" | "user"
+  actor_id: string | null
+  note: string | null
+  details?: Record<string, unknown>
+}
+
+export function historyEntry(
+  event: ManualTransferHistoryEvent,
+  {
+    actor_type = "system",
+    actor_id = null,
+    note = null,
+    details,
+    at = new Date(),
+  }: Partial<Omit<ManualTransferHistoryEntry, "event" | "at">> & { at?: Date } = {}
+): ManualTransferHistoryEntry {
+  return {
+    event,
+    at: at.toISOString(),
+    actor_type,
+    actor_id,
+    note,
+    ...(details ? { details } : {}),
+  }
+}
+
+/** Returns the history with the entry appended, never mutating the input */
+export function appendHistory(
+  data: { history?: unknown } | undefined,
+  ...entries: ManualTransferHistoryEntry[]
+): ManualTransferHistoryEntry[] {
+  const history = Array.isArray(data?.history) ? (data!.history as ManualTransferHistoryEntry[]) : []
+  return [...history, ...entries]
+}
+
 export type ManualTransferPaymentData = {
   reference: string
   account: AccountSnapshot
@@ -63,6 +115,7 @@ export type ManualTransferPaymentData = {
   confirmation?: ManualTransferConfirmation
   canceled_at?: string
   refunds?: ManualTransferRefund[]
+  history?: ManualTransferHistoryEntry[]
 }
 
 const KEYS = [
@@ -78,6 +131,7 @@ const KEYS = [
   "confirmation",
   "canceled_at",
   "refunds",
+  "history",
 ] as const
 
 type Picked = Partial<ManualTransferPaymentData>

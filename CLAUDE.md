@@ -41,10 +41,19 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   hanya ditulis workflow `confirm-manual-transfer-payment` (lalu `capturePaymentWorkflow.runAsStep`, kompensasi
   mengembalikan data). `UpdatePaymentDTO` hanya mendeklarasikan `id`, tapi `updatePayment` meneruskan `data` ke repo.
 - Akun di-snapshot ulang saat authorize (edit/nonaktif sebelum order dibuat ikut terbaca); setelah itu beku.
+- Referensi **dijamin unik oleh DB**: provider meng-insert ke `manual_transfer_reference` (unique index pada
+  `code`, plus index tanpa `WHERE deleted_at` yang ditambahkan manual di migration) lewat `__pg_connection__`, dan
+  generate ulang saat `23505` (maks 8 kali, `src/lib/reference-store.ts`). Baris tidak pernah dihapus.
+- **Riwayat pembayaran** ada di `payment.data.history` (`authorized`, `account_substituted`, `confirmed`,
+  `canceled`, `refunded`; Fase 2+: `proof_uploaded`, `proof_rejected`). Riwayat dari storefront dibuang; dimulai di
+  authorize. Widget `order.details.side` membacanya lewat `GET /admin/manual-transfer/orders/:id`.
+- Admin: kelas Tailwind responsif (`sm:*`) yang tidak dipakai dashboard tidak ter-generate; pakai kelas dasar.
+  Label sidebar memakai `translationNs: "translation"`. Screenshot: container `mt-spike-browser` dari image
+  `mcr.microsoft.com/playwright:v1.48.2-jammy` (Chromium host kurang `libnss3`).
 - Referensi: Crockford base32, 9 acak + 1 cek Luhn mod 32 (`src/lib/reference.ts`). Tenggat: hari kerja di
   `timezone` opsi provider, time-of-day dipertahankan (`src/lib/deadline.ts`).
-- Fase 1 diuji E2E dengan app sementara (DB `mt_phase1` di mt-spike-pg, port 9400/9401): 33/33 cek di mode shared
-  dan split.
+- Fase 1 (+ perbaikan a/b) diuji E2E dengan app sementara (DB `mt_phase1` di mt-spike-pg, port 9400/9401): 41/41
+  cek di mode shared dan split.
 - Id workflow/step memakai prefix `manual-transfer-` agar tidak bentrok dengan plugin lain (lint mewajibkan
   id = nama export/file).
 

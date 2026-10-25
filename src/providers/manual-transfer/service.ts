@@ -45,17 +45,17 @@ import {
   isValidTimezone,
 } from "../../lib/deadline"
 import {
+  appendHistory,
+  HISTORY_EVENT,
+  historyEntry,
   MANUAL_TRANSFER_STATUS,
+  ManualTransferHistoryEntry,
   ManualTransferPaymentData,
   pickPaymentData,
   toSessionStatus,
 } from "../../lib/payment-data"
-import {
-  DEFAULT_REFERENCE_PREFIX,
-  generateReference,
-  isValidReferencePrefix,
-  parseReference,
-} from "../../lib/reference"
+import { DEFAULT_REFERENCE_PREFIX, isValidReferencePrefix, parseReference } from "../../lib/reference"
+import { reserveReference } from "../../lib/reference-store"
 
 type InjectedDependencies = {
   logger: Logger
@@ -160,7 +160,15 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
     regionId: string | null,
     accountId: string | null
   ): Promise<AccountRow> {
-    const rows = await listActiveAccounts(this.db(), currencyCode)
+    return this.pickOrFail(await listActiveAccounts(this.db(), currencyCode), currencyCode, regionId, accountId)
+  }
+
+  protected pickOrFail(
+    rows: AccountRow[],
+    currencyCode: string,
+    regionId: string | null,
+    accountId: string | null
+  ): AccountRow {
     const account = pickAccount(rows, { regionId, accountId })
     if (!account) {
       throw new MedusaError(
@@ -175,7 +183,10 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
     const data = (input.data ?? {}) as Record<string, unknown>
     const regionId = await this.resolveRegionId(data)
     const account = await this.chooseAccount(input.currency_code, regionId, asString(data.account_id))
-    const reference = generateReference(this.options_.referencePrefix)
+    const reference = await reserveReference(this.db(), {
+      prefix: this.options_.referencePrefix,
+      sessionId: asString(data.session_id),
+    })
     const sessionData: ManualTransferPaymentData = {
       reference,
       account: snapshotAccount(account),
@@ -199,7 +210,10 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
     }
     const reference =
       (current.reference && parseReference(current.reference)) ||
-      generateReference(this.options_.referencePrefix)
+      (await reserveReference(this.db(), {
+        prefix: this.options_.referencePrefix,
+        sessionId: current.session_id ?? null,
+      }))
     const data: ManualTransferPaymentData = {
       ...current,
       reference,
@@ -228,13 +242,31 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
       )
     }
     // The account may have been edited or deactivated since checkout started
-    const account = await this.chooseAccount(
-      session.currency_code,
-      session.region_id ?? null,
-      session.account.id
-    )
+    const rows = await listActiveAccounts(this.db(), session.currency_code)
+    const account = this.pickOrFail(rows, session.currency_code, session.region_id ?? null, session.account.id)
     const now = new Date()
     const expiresAt = addBusinessDays(now, this.options_.deadlineBusinessDays, this.options_)
+    // Buyer-supplied history is never carried over: it starts here
+    const history: ManualTransferHistoryEntry[] = [
+      historyEntry(HISTORY_EVENT.AUTHORIZED, { at: now, details: { account_id: account.id } }),
+    ]
+    if (account.id !== session.account.id) {
+      const reason = rows.some((row) => row.id === session.account!.id) ? "not_offered_in_region" : "inactive_or_deleted"
+      history.push(
+        historyEntry(HISTORY_EVENT.ACCOUNT_SUBSTITUTED, {
+          at: now,
+          note: `Account chosen at checkout (${session.account.bank_name}) was not available; ${account.bank_name} was used instead.`,
+          details: {
+            reason,
+            from: { id: session.account.id, bank_name: session.account.bank_name, account_number: session.account.account_number },
+            to: { id: account.id, bank_name: account.bank_name, account_number: account.account_number },
+          },
+        })
+      )
+      this.logger_.warn(
+        `manual-transfer: payment ${session.reference} uses account ${account.id} instead of ${session.account.id} (${reason})`
+      )
+    }
     const data: ManualTransferPaymentData = {
       ...session,
       reference,
@@ -245,6 +277,7 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
       status: MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
       authorized_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
+      history,
     }
     return { status: "authorized", data }
   }
@@ -266,10 +299,13 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
   async refundPayment(input: RefundPaymentInput): Promise<RefundPaymentOutput> {
     const data = (input.data ?? {}) as Record<string, unknown>
     const refunds = Array.isArray(data.refunds) ? data.refunds : []
+    const amount = toNumber(input.amount)
+    const now = new Date()
     return {
       data: {
         ...data,
-        refunds: [...refunds, { amount: toNumber(input.amount), refunded_at: new Date().toISOString() }],
+        refunds: [...refunds, { amount, refunded_at: now.toISOString() }],
+        history: appendHistory(data, historyEntry(HISTORY_EVENT.REFUNDED, { at: now, details: { amount } })),
       },
     }
   }
@@ -282,6 +318,7 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
         "This manual transfer is already paid; refund it instead of canceling."
       )
     }
+    const now = new Date()
     return {
       data: {
         ...data,
@@ -289,7 +326,8 @@ class ManualTransferProviderService extends AbstractPaymentProvider<ManualTransf
           data.status === MANUAL_TRANSFER_STATUS.EXPIRED
             ? MANUAL_TRANSFER_STATUS.EXPIRED
             : MANUAL_TRANSFER_STATUS.CANCELED,
-        canceled_at: new Date().toISOString(),
+        canceled_at: now.toISOString(),
+        history: appendHistory(data, historyEntry(HISTORY_EVENT.CANCELED, { at: now })),
       },
     }
   }

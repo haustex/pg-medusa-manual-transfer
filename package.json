@@ -1,9 +1,19 @@
 {
   "name": "medusa-payment-manual-transfer",
   "version": "0.0.1",
-  "description": "A starter for Medusa plugins.",
-  "author": "Medusa (https://medusajs.com)",
+  "description": "Manual bank transfer with payment-proof upload and admin verification for Medusa v2 — by Haus Kayu",
+  "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
+  "homepage": "https://github.com/haustex/pg-medusa-manual-transfer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haustex/pg-medusa-manual-transfer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/haustex/pg-medusa-manual-transfer/issues",
+    "email": "dev@hauskayu.com"
+  },
+  "funding": "https://hauskayu.com",
   "files": [
     ".medusa/server"
   ],
@@ -22,10 +32,15 @@
   },
   "keywords": [
     "medusa",
-    "plugin",
-    "medusa-plugin-other",
+    "medusa-v2",
     "medusa-plugin",
-    "medusa-v2"
+    "medusa-plugin-integration",
+    "medusa-plugin-payment",
+    "bank-transfer",
+    "manual-payment",
+    "payment-proof",
+    "indonesia",
+    "usd"
   ],
   "scripts": {
     "build": "medusa plugin:build",
@@ -68,14 +83,14 @@
     "yalc": "^1.0.0-pre.53"
   },
   "peerDependencies": {
-    "@medusajs/admin-sdk": "2.19.0",
-    "@medusajs/cli": "2.19.0",
-    "@medusajs/framework": "2.19.0",
-    "@medusajs/icons": "2.19.0",
-    "@medusajs/js-sdk": "2.19.0",
-    "@medusajs/medusa": "2.19.0",
-    "@medusajs/test-utils": "2.19.0",
-    "@medusajs/ui": "4.2.1"
+    "@medusajs/admin-sdk": "^2.19.0",
+    "@medusajs/cli": "^2.19.0",
+    "@medusajs/framework": "^2.19.0",
+    "@medusajs/icons": "^2.19.0",
+    "@medusajs/js-sdk": "^2.19.0",
+    "@medusajs/medusa": "^2.19.0",
+    "@medusajs/test-utils": "^2.19.0",
+    "@medusajs/ui": "^4.2.1"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

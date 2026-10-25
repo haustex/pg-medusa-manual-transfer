@@ -36,6 +36,19 @@ function account(overrides: Partial<AccountRow>): AccountRow {
   }
 }
 
+const reserved: { code: string; sessionId: string | null }[] = []
+
+jest.mock("../../../lib/reference-store", () => {
+  const { generateReference } = jest.requireActual("../../../lib/reference")
+  return {
+    reserveReference: jest.fn(async (_pg: unknown, { prefix, sessionId }: { prefix: string; sessionId?: string | null }) => {
+      const code = generateReference(prefix)
+      reserved.push({ code, sessionId: sessionId ?? null })
+      return code
+    }),
+  }
+})
+
 const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() } as never
 
 function provider(options = {}) {
@@ -46,6 +59,7 @@ beforeEach(() => {
   accounts.length = 0
   accounts.push(account({}))
   sessionRegion = null
+  reserved.length = 0
 })
 
 describe("validateOptions", () => {
@@ -83,6 +97,7 @@ describe("initiatePayment", () => {
     expect(status).toBe("pending")
     expect(parseReference(id)).toBe(id)
     expect(id).toMatch(/^SHOP-/)
+    expect(reserved).toEqual([{ code: id, sessionId: "payses_1" }])
     expect(data).toEqual({
       reference: id,
       account: {
@@ -168,12 +183,51 @@ describe("authorizePayment", () => {
     expect((authorized?.account as { account_number: string }).account_number).toBe("1111111111")
   })
 
-  it("switches to another account when the chosen one was deactivated", async () => {
+  it("records the order being placed in the history", async () => {
+    const { data } = await provider().authorizePayment({ data: await session() })
+    const history = data?.history as { event: string; actor_type: string }[]
+    expect(history.map((h) => h.event)).toEqual(["authorized"])
+    expect(history[0].actor_type).toBe("system")
+  })
+
+  it("switches to another account when the chosen one was deactivated, and records it", async () => {
     const data = await session()
     accounts[0] = account({ is_active: false })
-    accounts.push(account({ id: "mtacc_backup" }))
+    accounts.push(account({ id: "mtacc_backup", bank_name: "Backup Bank", account_number: "2222222222" }))
     const { data: authorized } = await provider().authorizePayment({ data })
     expect((authorized?.account as { id: string }).id).toBe("mtacc_backup")
+    const history = authorized?.history as { event: string; note: string; details: Record<string, any> }[]
+    expect(history.map((h) => h.event)).toEqual(["authorized", "account_substituted"])
+    expect(history[1].details).toEqual({
+      reason: "inactive_or_deleted",
+      from: { id: "mtacc_usd", bank_name: "Test Bank", account_number: "0000000000" },
+      to: { id: "mtacc_backup", bank_name: "Backup Bank", account_number: "2222222222" },
+    })
+    expect(history[1].note).toMatch(/Test Bank.*Backup Bank/)
+    expect((logger as { warn: jest.Mock }).warn).toHaveBeenCalled()
+  })
+
+  it("records the reason when the chosen account is no longer offered in the region", async () => {
+    sessionRegion = "reg_us"
+    const data = await session()
+    accounts[0] = account({ region_ids: ["reg_eu"] })
+    accounts.push(account({ id: "mtacc_us", region_ids: ["reg_us"], rank: 1 }))
+    const { data: authorized } = await provider().authorizePayment({ data })
+    const history = authorized?.history as { event: string; details: Record<string, any> }[]
+    expect(history[1].details.reason).toBe("not_offered_in_region")
+  })
+
+  it("does not record a substitution when the same account is used", async () => {
+    const data = await session()
+    accounts[0] = account({ account_number: "1111111111" })
+    const { data: authorized } = await provider().authorizePayment({ data })
+    expect((authorized?.history as { event: string }[]).map((h) => h.event)).toEqual(["authorized"])
+  })
+
+  it("ignores history the storefront slipped in", async () => {
+    const forged = await session({ history: [{ event: "confirmed", actor_type: "user" }] })
+    const { data } = await provider().authorizePayment({ data: forged })
+    expect((data?.history as { event: string }[]).map((h) => h.event)).toEqual(["authorized"])
   })
 
   it("refuses a session without a valid reference", async () => {
@@ -208,6 +262,7 @@ describe("cancel, refund, status", () => {
     const { data } = await provider().cancelPayment({ data: { status: "awaiting_payment" } })
     expect(data?.status).toBe(MANUAL_TRANSFER_STATUS.CANCELED)
     expect(data?.canceled_at).toBeDefined()
+    expect((data?.history as { event: string }[]).map((h) => h.event)).toEqual(["canceled"])
     const expired = await provider().cancelPayment({ data: { status: "expired" } })
     expect(expired.data?.status).toBe(MANUAL_TRANSFER_STATUS.EXPIRED)
     await expect(provider().cancelPayment({ data: { status: "paid" } })).rejects.toThrow(/refund/)

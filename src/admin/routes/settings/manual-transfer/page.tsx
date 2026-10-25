@@ -55,7 +55,7 @@ const CreateAccountModal = () => {
   return (
     <FocusModal open={open} onOpenChange={setOpen}>
       <FocusModal.Trigger asChild>
-        <Button size="small" variant="secondary">
+        <Button size="small" variant="secondary" className="shrink-0 whitespace-nowrap">
           <Plus />
           {t("manualTransfer.settings.add")}
         </Button>
@@ -212,7 +212,7 @@ const AccountRow = ({
 
   return (
     <div className="flex items-start justify-between gap-x-4 px-6 py-4">
-      <div className="flex min-w-0 flex-col gap-y-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Text size="small" leading="compact" weight="plus">
             {account.bank_name}
@@ -224,7 +224,7 @@ const AccountRow = ({
             </Text>
           )}
         </div>
-        <Text size="small" leading="compact" className="text-ui-fg-subtle">
+        <Text size="small" leading="compact" className="text-ui-fg-subtle break-words">
           {account.account_holder} · {account.account_number}
           {account.swift_code ? ` · SWIFT ${account.swift_code}` : ""}
         </Text>
@@ -285,7 +285,7 @@ const ManualTransferSettingsPage = () => {
   return (
     <Container className="divide-y p-0">
       <div className="flex items-start justify-between gap-x-4 px-6 py-4">
-        <div className="flex flex-col gap-y-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-y-1">
           <Heading level="h2">{t("manualTransfer.settings.title")}</Heading>
           <Text size="small" leading="compact" className="text-ui-fg-subtle">
             {t("manualTransfer.settings.description")}
@@ -325,8 +325,18 @@ const ManualTransferSettingsPage = () => {
   )
 }
 
+const Breadcrumb = () => {
+  const { t } = useTranslation()
+  return <>{t("manualTransfer.settings.label")}</>
+}
+
 export const config = defineRouteConfig({
-  label: "Manual transfer",
+  label: "manualTransfer.settings.label",
+  translationNs: "translation",
 })
+
+export const handle = {
+  breadcrumb: () => <Breadcrumb />,
+}
 
 export default ManualTransferSettingsPage

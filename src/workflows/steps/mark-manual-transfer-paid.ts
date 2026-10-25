@@ -1,7 +1,13 @@
 import type { IPaymentModuleService, UpdatePaymentDTO } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk"
-import { MANUAL_TRANSFER_STATUS, ManualTransferConfirmation } from "../../lib/payment-data"
+import {
+  appendHistory,
+  HISTORY_EVENT,
+  historyEntry,
+  MANUAL_TRANSFER_STATUS,
+  ManualTransferConfirmation,
+} from "../../lib/payment-data"
 
 export type MarkManualTransferPaidInput = {
   payment_id: string
@@ -30,6 +36,20 @@ export const markManualTransferPaidStep = createStep(
       ...input.previous_data,
       status: MANUAL_TRANSFER_STATUS.PAID,
       confirmation: input.confirmation,
+      history: appendHistory(
+        input.previous_data,
+        historyEntry(HISTORY_EVENT.CONFIRMED, {
+          at: new Date(input.confirmation.confirmed_at),
+          actor_type: "user",
+          actor_id: input.confirmation.confirmed_by,
+          note: input.confirmation.note,
+          details: {
+            amount_received: input.confirmation.amount_received,
+            received_at: input.confirmation.received_at,
+            bank_reference: input.confirmation.bank_reference,
+          },
+        })
+      ),
     })
     return new StepResponse(undefined, { id: input.payment_id, data: input.previous_data })
   },

@@ -48,6 +48,47 @@
       "created": "Rekening ditambahkan",
       "updated": "Rekening disimpan",
       "deleted": "Rekening dihapus"
+    },
+    "widget": {
+      "title": "Transfer manual",
+      "reference": "Referensi",
+      "amount": "Tagihan",
+      "deadline": "Bayar sebelum",
+      "account": "Rekening tujuan",
+      "history": "Riwayat",
+      "noHistory": "Belum ada riwayat.",
+      "substituted": "Rekening diganti",
+      "substitutedText": "Rekening yang dipilih saat checkout ({{from}}) tidak tersedia ketika order dibuat, jadi pembeli diberi {{to}}. Pastikan transfer masuk ke rekening ini.",
+      "loadError": "Gagal memuat pembayaran transfer manual.",
+      "substitutedShort": "{{from}} → {{to}} ({{reason}})",
+      "reason": {
+        "inactive_or_deleted": "rekening nonaktif atau dihapus",
+        "not_offered_in_region": "rekening tidak ditawarkan di region ini"
+      }
+    },
+    "status": {
+      "awaiting_payment": "Menunggu pembayaran",
+      "awaiting_verification": "Menunggu verifikasi",
+      "paid": "Lunas",
+      "underpaid": "Kurang bayar",
+      "rejected": "Ditolak",
+      "expired": "Kedaluwarsa",
+      "canceled": "Dibatalkan"
+    },
+    "history": {
+      "authorized": "Order dibuat, menunggu pembayaran",
+      "account_substituted": "Rekening diganti",
+      "proof_uploaded": "Bukti transfer diunggah",
+      "proof_rejected": "Bukti transfer ditolak",
+      "confirmed": "Pembayaran dikonfirmasi",
+      "canceled": "Pembayaran dibatalkan",
+      "refunded": "Refund dicatat"
+    },
+    "actor": {
+      "system": "Sistem",
+      "customer": "Pelanggan",
+      "guest": "Tamu",
+      "user": "Admin"
     }
   }
 }
