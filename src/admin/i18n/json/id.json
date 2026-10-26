@@ -64,7 +64,12 @@
       "reason": {
         "inactive_or_deleted": "rekening nonaktif atau dihapus",
         "not_offered_in_region": "rekening tidak ditawarkan di region ini"
-      }
+      },
+      "proofs": "Bukti transfer",
+      "noProofs": "Belum ada bukti diunggah.",
+      "view": "Lihat",
+      "duplicate": "File yang sama sudah pernah diunggah untuk order lain:",
+      "rejectedBecause": "Ditolak: {{reason}}"
     },
     "status": {
       "awaiting_payment": "Menunggu pembayaran",
@@ -89,6 +94,11 @@
       "customer": "Pelanggan",
       "guest": "Tamu",
       "user": "Admin"
+    },
+    "proofStatus": {
+      "pending": "Menunggu dicek",
+      "accepted": "Diterima",
+      "rejected": "Ditolak"
     }
   }
 }

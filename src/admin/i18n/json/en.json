@@ -64,7 +64,12 @@
       "reason": {
         "inactive_or_deleted": "account inactive or deleted",
         "not_offered_in_region": "account not offered in this region"
-      }
+      },
+      "proofs": "Payment proofs",
+      "noProofs": "No proof uploaded yet.",
+      "view": "View",
+      "duplicate": "The same file was already uploaded for another order:",
+      "rejectedBecause": "Rejected: {{reason}}"
     },
     "status": {
       "awaiting_payment": "Awaiting payment",
@@ -89,6 +94,11 @@
       "customer": "Customer",
       "guest": "Guest",
       "user": "Admin"
+    },
+    "proofStatus": {
+      "pending": "Pending review",
+      "accepted": "Accepted",
+      "rejected": "Rejected"
     }
   }
 }

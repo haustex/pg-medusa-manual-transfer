@@ -4,7 +4,7 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
 
 > Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
-**Status:** in development (phase 1 of 6: payment provider and bank accounts). Coming soon to hauskayu.com.
+**Status:** in development (phase 2 of 6: payment provider, bank accounts, payment-proof upload). Coming soon to hauskayu.com.
 
 [English](#english) · [Bahasa Indonesia](#bahasa-indonesia)
 
@@ -28,9 +28,12 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
   transfer (amount received, date, bank reference) after checking the bank statement, and only then is the payment
   captured.
 - The account details are **copied into each order** when it is placed, so later edits only apply to new orders.
+- **Payment-proof upload**: JPG, PNG or PDF up to 5 MB, recognised by the file's content (not its name). Logged-in
+  customers upload from their order; guests use a secret upload token. Proofs are stored privately in the database
+  and admins open them through 5-minute signed links. After a rejection the buyer can upload again. A file already
+  sent for another order is flagged. Uploads are rate limited per IP and per order.
 
-Payment-proof upload, the verification tab, reminders, auto-cancel, e-mails, invoices and storefront pages follow in
-later phases.
+The verification tab, reminders, auto-cancel, e-mails, invoices and storefront pages follow in later phases.
 
 ### Install
 
@@ -43,7 +46,20 @@ npm install medusa-payment-manual-transfer
 ```ts
 module.exports = defineConfig({
   // …
-  plugins: [{ resolve: "medusa-payment-manual-transfer", options: {} }],
+  plugins: [
+    {
+      resolve: "medusa-payment-manual-transfer",
+      options: {
+        // secret: "…",           // signs guest upload tokens and proof links; default MANUAL_TRANSFER_SECRET, then http.jwtSecret
+        proofUploads: {
+          perIp: 10,               // upload attempts per IP per window
+          perIpWindowMinutes: 15,
+          readsPerIpPerMinute: 120,
+          perOrderPerDay: 5,       // proofs one order may receive in 24 hours
+        },
+      },
+    },
+  ],
   modules: [
     {
       resolve: "@medusajs/medusa/payment",
@@ -75,19 +91,43 @@ your bank account in **Settings → Manual transfer**.
 | --- | --- | --- |
 | GET / POST | `/admin/manual-transfer/accounts` | list / create accounts |
 | GET / POST / DELETE | `/admin/manual-transfer/accounts/:id` | read / update / delete an account |
-| GET | `/admin/manual-transfer/orders/:id` | the order's manual-transfer payment and its history |
+| GET | `/admin/manual-transfer/orders/:id` | the order's manual-transfer payment, history and proofs |
 | POST | `/admin/manual-transfer/payments/:id/confirm` | confirm a transfer and capture the payment |
+| GET | `/admin/manual-transfer/proofs/:id/url` | a signed link to view a proof, valid 5 minutes |
+| POST | `/admin/manual-transfer/proofs/:id/reject` | reject a pending proof, `{ reason }` required |
 
 `confirm` takes `{ amount_received, received_at: "YYYY-MM-DD", bank_reference?, note?, accept_shortfall? }`. It is
 refused when less than the amount due arrived, unless `accept_shortfall` is `true`.
 
 **Always check the bank statement in your banking app before confirming. Never rely on a proof image alone.**
 
+### Store API (payment proofs)
+
+All need the publishable API key. The buyer is either the logged-in customer who placed the order (session or
+bearer) or anyone holding the order's upload token (`x-manual-transfer-token` header, or `?token=`).
+
+| Method | Path | |
+| --- | --- | --- |
+| GET | `/store/manual-transfer/orders/:id` | instructions (reference, amount, account, deadline), status, `can_upload`, proofs |
+| POST | `/store/manual-transfer/orders/:id/proofs` | multipart: `file` (JPG/PNG/PDF ≤ 5 MB), optional `note` |
+| GET | `/store/manual-transfer/carts/:id/upload-token` | right after checkout (24 h): trade the completed cart id for `{ order_id, token }` |
+
+Anyone else gets `404`. Too many requests get `429` with `Retry-After`. Upload tokens are HMAC-derived from the order
+id, so the order e-mail (phase 4) can always rebuild the link; they only work while the payment accepts proofs.
+
+The per-IP limit is kept in memory per server process; the per-order limit is counted in the database. Behind a
+reverse proxy, make sure Express sees the client IP (`trust proxy`). Run several server instances? Use a shared
+locking provider (e.g. `@medusajs/medusa/locking-redis`), since proof uploads, rejections and confirmations lock the
+payment.
+
 ### Payment data
 
 `payment.data` (and the payment session's data) holds `reference`, `account` (the copied account details),
 `amount`, `currency_code`, `status` (`awaiting_payment`, `awaiting_verification`, `paid`, `underpaid`, `rejected`,
-`expired`, `canceled`), `authorized_at`, `expires_at`, `history` and, once confirmed, `confirmation`. The provider rebuilds it
+`expired`, `canceled`), `authorized_at`, `expires_at`, `history` and, once confirmed, `confirmation`.
+
+Events for notifications: `manual_transfer.proof_uploaded` and `manual_transfer.proof_rejected` (`{ id, order_id }`),
+`manual_transfer.payment_confirmed` (`{ id }` of the payment). The provider rebuilds it
 from these keys at every step, so data a storefront sends when creating the session is ignored.
 
 ---
@@ -110,8 +150,12 @@ from these keys at every step, so data a storefront sends when creating the sess
   (nominal diterima, tanggal, ref bank) setelah mengecek mutasi, baru pembayaran di-capture.
 - Detail rekening **disalin ke setiap order**, jadi perubahan rekening hanya berlaku untuk order baru.
 
-Upload bukti, tab verifikasi, pengingat, auto-cancel, email, invoice, dan halaman storefront menyusul di fase
-berikutnya. Konfigurasi sama dengan bagian English di atas.
+- **Upload bukti transfer**: JPG, PNG, atau PDF maksimal 5 MB, dicek dari isi file (bukan namanya). Pelanggan yang
+  login mengunggah dari halaman order; tamu memakai token rahasia. Bukti disimpan privat di database dan admin
+  melihatnya lewat link bertanda tangan yang berlaku 5 menit. Setelah ditolak, pembeli bisa upload ulang. File yang
+  sama yang pernah dikirim untuk order lain ditandai. Upload dibatasi per IP dan per order.
+
+Tab verifikasi, pengingat, auto-cancel, email, invoice, dan halaman storefront menyusul di fase berikutnya. Konfigurasi sama dengan bagian English di atas.
 
 **Selalu cek mutasi di aplikasi bank sebelum konfirmasi, jangan hanya percaya bukti transfer.**
 

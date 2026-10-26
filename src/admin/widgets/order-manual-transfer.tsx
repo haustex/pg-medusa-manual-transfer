@@ -1,16 +1,21 @@
 import { defineWidgetConfig } from "@medusajs/admin-sdk"
 import type { DetailWidgetProps, HttpTypes } from "@medusajs/framework/types"
-import { ExclamationCircle } from "@medusajs/icons"
-import { Alert, Container, Copy, Heading, StatusBadge, Text } from "@medusajs/ui"
+import { ArrowUpRightOnBox, ExclamationCircle } from "@medusajs/icons"
+import { Alert, Button, Container, Copy, Heading, StatusBadge, Text, toast } from "@medusajs/ui"
 import { useQuery } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
+import { Link } from "react-router-dom"
 import {
   formatAmount,
   formatDateTime,
+  formatSize,
   getOrderTransfer,
+  openProof,
   orderTransferQueryKey,
+  PROOF_STATUS_COLOR,
   STATUS_COLOR,
   TransferHistoryEntry,
+  TransferProof,
 } from "../lib/transfer"
 
 type Party = { bank_name?: string; account_number?: string }
@@ -62,19 +67,67 @@ const HistoryItem = ({ entry }: { entry: TransferHistoryEntry }) => {
   )
 }
 
+const ProofItem = ({ proof }: { proof: TransferProof }) => {
+  const { t, i18n } = useTranslation()
+  const view = () =>
+    openProof(proof.id).catch((error) => toast.error(error instanceof Error ? error.message : String(error)))
+  return (
+    <li className="flex flex-col gap-y-1">
+      <div className="flex items-start justify-between gap-x-2">
+        <div className="flex min-w-0 flex-col gap-y-0.5">
+          <Text size="small" leading="compact" weight="plus" className="truncate">
+            {proof.filename}
+          </Text>
+          <Text size="xsmall" leading="compact" className="text-ui-fg-subtle">
+            {formatDateTime(proof.created_at, i18n.language)} · {formatSize(proof.size)} ·{" "}
+            {t(`manualTransfer.actor.${proof.uploaded_by}`)}
+          </Text>
+        </div>
+        <div className="flex shrink-0 items-center gap-x-2">
+          <StatusBadge color={PROOF_STATUS_COLOR[proof.status] ?? "grey"}>
+            {t(`manualTransfer.proofStatus.${proof.status}`)}
+          </StatusBadge>
+          <Button size="small" variant="secondary" onClick={view}>
+            <ArrowUpRightOnBox />
+            {t("manualTransfer.widget.view")}
+          </Button>
+        </div>
+      </div>
+      {proof.duplicate_of_order_id && (
+        <Text size="xsmall" leading="compact" className="text-ui-fg-error break-words">
+          {t("manualTransfer.widget.duplicate")}{" "}
+          <Link to={`/orders/${proof.duplicate_of_order_id}`} className="underline">
+            {proof.duplicate_of_order_id}
+          </Link>
+        </Text>
+      )}
+      {proof.note && (
+        <Text size="xsmall" leading="compact" className="text-ui-fg-muted break-words">
+          “{proof.note}”
+        </Text>
+      )}
+      {proof.rejection_reason && (
+        <Text size="xsmall" leading="compact" className="text-ui-fg-muted break-words">
+          {t("manualTransfer.widget.rejectedBecause", { reason: proof.rejection_reason })}
+        </Text>
+      )}
+    </li>
+  )
+}
+
 const OrderManualTransferWidget = ({ data: order }: DetailWidgetProps<HttpTypes.AdminOrder>) => {
   const { t, i18n } = useTranslation()
-  const { data: payment, isLoading, isError } = useQuery({
+  const { data: transfer, isLoading, isError } = useQuery({
     queryKey: orderTransferQueryKey(order.id),
     queryFn: () => getOrderTransfer(order.id),
     retry: false,
   })
 
   // Not a manual-transfer order: stay out of the way
-  if (isLoading || payment === null) {
+  if (isLoading || transfer === null) {
     return null
   }
-  if (isError || !payment) {
+  if (isError || !transfer) {
     return (
       <Container className="px-6 py-4">
         <Text size="small" className="text-ui-fg-error">
@@ -84,6 +137,7 @@ const OrderManualTransferWidget = ({ data: order }: DetailWidgetProps<HttpTypes.
     )
   }
 
+  const { payment, proofs } = transfer
   const { data } = payment
   const status = data.status ?? "awaiting_payment"
   const history = data.history ?? []
@@ -145,6 +199,23 @@ const OrderManualTransferWidget = ({ data: order }: DetailWidgetProps<HttpTypes.
               {data.account.account_number}
             </Text>
           </Row>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-y-3 px-6 py-4">
+        <Text size="small" leading="compact" weight="plus">
+          {t("manualTransfer.widget.proofs")}
+        </Text>
+        {proofs.length ? (
+          <ul className="flex flex-col gap-y-3">
+            {proofs.map((proof) => (
+              <ProofItem key={proof.id} proof={proof} />
+            ))}
+          </ul>
+        ) : (
+          <Text size="small" className="text-ui-fg-subtle">
+            {t("manualTransfer.widget.noProofs")}
+          </Text>
         )}
       </div>
 

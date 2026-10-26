@@ -1,4 +1,3 @@
-import type { IPaymentModuleService, UpdatePaymentDTO } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { createStep, StepResponse } from "@medusajs/framework/workflows-sdk"
 import {
@@ -8,20 +7,13 @@ import {
   MANUAL_TRANSFER_STATUS,
   ManualTransferConfirmation,
 } from "../../lib/payment-data"
+import { writePaymentData } from "./update-manual-transfer-payment-data"
 
 export type MarkManualTransferPaidInput = {
   payment_id: string
   /** payment.data as read before the change, restored on rollback */
   previous_data: Record<string, unknown>
   confirmation: ManualTransferConfirmation
-}
-
-/**
- * UpdatePaymentDTO only declares `id`, but updatePayment passes the whole
- * object to the payment repository, so `data` is written as well.
- */
-function writePaymentData(paymentModule: IPaymentModuleService, id: string, data: Record<string, unknown>) {
-  return paymentModule.updatePayment({ id, data } as UpdatePaymentDTO)
 }
 
 /**

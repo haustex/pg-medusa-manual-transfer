@@ -1,4 +1,6 @@
 export * from "./confirm-manual-transfer-payment"
 export * from "./create-manual-transfer-account"
 export * from "./delete-manual-transfer-account"
+export * from "./reject-manual-transfer-proof"
 export * from "./update-manual-transfer-account"
+export * from "./upload-manual-transfer-proof"

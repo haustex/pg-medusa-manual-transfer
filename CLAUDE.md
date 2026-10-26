@@ -54,6 +54,20 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   `timezone` opsi provider, time-of-day dipertahankan (`src/lib/deadline.ts`).
 - Fase 1 (+ perbaikan a/b) diuji E2E dengan app sementara (DB `mt_phase1` di mt-spike-pg, port 9400/9401): 41/41
   cek di mode shared dan split.
+- **Bukti transfer disimpan di DB** (`manual_transfer_proof` + isi base64 di `manual_transfer_proof_file`), bukan File
+  Module: provider `file-local` menaruh file "private" di `static/` yang publik. Admin membuka lewat
+  `GET /admin/manual-transfer/proofs/:id/url` → `/manual-transfer/proofs/:id/file?expires&signature` (HMAC, 5 menit,
+  di luar `/admin` supaya bisa dibuka di tab baru; header nosniff, no-store, CSP sandbox untuk gambar).
+- Tipe file dari magic bytes (`src/lib/proof-file.ts`); nama/mime dari browser diabaikan. multer memory, 5 MB → 413.
+- Akses pembeli: customer login pemilik order, atau token upload = HMAC(secret, order_id) (`src/lib/tokens.ts`).
+  Secret: opsi plugin `secret` → env `MANUAL_TRANSFER_SECRET` → `http.jwtSecret`. Selain itu 404. Token tamu juga
+  bisa ditukar dari cart id yang selesai ≤ 24 jam (`/store/manual-transfer/carts/:id/upload-token`).
+- Rate limit: per IP in-memory per proses (`proofRateLimit`), per order 5/24 jam dihitung di DB. Opsi plugin
+  `proofUploads`. Opsi plugin dibaca dari `configModule.plugins` (resolve = nama paket atau path yang berakhiran nama
+  paket).
+- Semua workflow yang menulis `payment.data` (upload, tolak, konfirmasi) memakai `acquireLockStep` dengan
+  `paymentLockKey(payment_id)`. Workflow `reject-manual-transfer-proof` sudah ada (API saja); UI-nya di Fase 3.
+- Fase 2 diuji E2E: 93/93 cek (Fase 1 + 52 cek Fase 2) di mode shared dan split.
 - Id workflow/step memakai prefix `manual-transfer-` agar tidak bentrok dengan plugin lain (lint mewajibkan
   id = nama export/file).
 

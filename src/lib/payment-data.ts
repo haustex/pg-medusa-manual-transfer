@@ -35,6 +35,24 @@ export const CONFIRMABLE_STATUSES: readonly ManualTransferStatus[] = [
   MANUAL_TRANSFER_STATUS.REJECTED,
 ]
 
+/** Statuses in which the buyer may upload a (new) payment proof */
+export const UPLOADABLE_STATUSES: readonly ManualTransferStatus[] = [
+  MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
+  MANUAL_TRANSFER_STATUS.REJECTED,
+  MANUAL_TRANSFER_STATUS.UNDERPAID,
+]
+
+/** Lock key shared by every workflow that rewrites a payment's data */
+export function paymentLockKey(paymentId: string): string {
+  return `manual-transfer:payment:${paymentId}`
+}
+
+export const MANUAL_TRANSFER_EVENTS = {
+  PROOF_UPLOADED: "manual_transfer.proof_uploaded",
+  PROOF_REJECTED: "manual_transfer.proof_rejected",
+  PAYMENT_CONFIRMED: "manual_transfer.payment_confirmed",
+} as const
+
 export type ManualTransferConfirmation = {
   amount_received: number
   /** Date the money arrived according to the bank statement (YYYY-MM-DD) */
