@@ -26,6 +26,8 @@ const ManualTransferProof = model
     note: model.text().nullable(),
     /** Set when the same file was already uploaded for another order */
     duplicate_of_order_id: model.text().nullable(),
+    /** Set when the file content was deleted under proofRetentionDays; the record stays */
+    file_deleted_at: model.dateTime().nullable(),
   })
   .indexes([{ on: ["order_id"] }, { on: ["payment_id"] }, { on: ["sha256"] }])
 

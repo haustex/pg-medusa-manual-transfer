@@ -3,7 +3,10 @@ import {
   PostAdminCreateAccount,
   PostAdminUpdateAccount,
 } from "./admin/manual-transfer/accounts/validators"
-import { PostAdminConfirmPayment } from "./admin/manual-transfer/payments/validators"
+import {
+  PostAdminConfirmPayment,
+  PostAdminRecordUnderpayment,
+} from "./admin/manual-transfer/payments/validators"
 import { PostAdminRejectProof } from "./admin/manual-transfer/proofs/validators"
 import { proofRateLimit, proofUploadParser } from "./manual-transfer-http"
 
@@ -28,6 +31,11 @@ export default defineMiddlewares({
       middlewares: [validateAndTransformBody(PostAdminConfirmPayment)],
     },
     {
+      matcher: "/admin/manual-transfer/payments/:id/underpaid",
+      method: "POST",
+      middlewares: [validateAndTransformBody(PostAdminRecordUnderpayment)],
+    },
+    {
       matcher: "/admin/manual-transfer/proofs/:id/reject",
       method: "POST",
       middlewares: [validateAndTransformBody(PostAdminRejectProof)],
@@ -46,7 +54,8 @@ export default defineMiddlewares({
     {
       matcher: "/store/manual-transfer/carts/:id/upload-token",
       method: "GET",
-      middlewares: [proofRateLimit("read")],
+      // Its own, tighter budget: each call tries a cart id
+      middlewares: [proofRateLimit("token")],
     },
     {
       matcher: "/manual-transfer/proofs/:id/file",

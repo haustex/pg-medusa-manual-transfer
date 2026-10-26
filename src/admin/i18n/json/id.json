@@ -34,7 +34,30 @@
       "deactivate": "Nonaktifkan",
       "delete": "Hapus",
       "save": "Simpan",
-      "cancel": "Batal"
+      "cancel": "Batal",
+      "confirm": "Konfirmasi lunas",
+      "recordUnderpaid": "Kurang bayar",
+      "reject": "Tolak",
+      "confirmTitle": "Konfirmasi pembayaran",
+      "underpaidTitle": "Catat kurang bayar",
+      "underpaidText": "Dana yang masuk kurang dari tagihan. Transfer ini dicatat, order menampilkan sisanya, dan pembeli bisa mengunggah bukti untuk sisa tagihan. Belum ada yang di-capture.",
+      "rejectTitle": "Tolak bukti transfer",
+      "bankCheckTitle": "Cek mutasi dulu",
+      "bankCheck": "Cek mutasi di aplikasi bank atau rekening koran, jangan hanya percaya bukti. Bukti transfer mudah dipalsukan.",
+      "amountReceived": "Nominal diterima ({{currency}})",
+      "receivedAt": "Tanggal dana masuk (sesuai mutasi)",
+      "bankReference": "Ref bank",
+      "bankReferenceHint": "Opsional, mis. nomor transaksi di mutasi",
+      "note": "Catatan (internal)",
+      "shortfallTitle": "Kurang {{amount}} dari tagihan",
+      "shortfallText": "Catat sebagai kurang bayar agar pembeli melunasi sisanya, atau tetap konfirmasi kalau toko menanggung selisihnya (mis. biaya bank).",
+      "acceptShortfall": "Tetap konfirmasi lunas; toko menanggung {{amount}}",
+      "thisTransfer": "Transfer ini",
+      "leftToPay": "Sisa tagihan",
+      "coversAll": "Nominal ini sudah menutup seluruh tagihan. Pakai \"Konfirmasi lunas\".",
+      "reason": "Alasan",
+      "reasonPlaceholder": "mis. Nominal di bukti tidak terbaca",
+      "reasonHint": "Alasan ini dilihat pembeli, lalu pembeli bisa mengunggah bukti baru."
     },
     "titles": {
       "create": "Tambah rekening",
@@ -47,7 +70,10 @@
     "toasts": {
       "created": "Rekening ditambahkan",
       "updated": "Rekening disimpan",
-      "deleted": "Rekening dihapus"
+      "deleted": "Rekening dihapus",
+      "confirmed": "Pembayaran dikonfirmasi dan di-capture",
+      "underpaid": "Kurang bayar dicatat",
+      "rejected": "Bukti transfer ditolak"
     },
     "widget": {
       "title": "Transfer manual",
@@ -69,7 +95,15 @@
       "noProofs": "Belum ada bukti diunggah.",
       "view": "Lihat",
       "duplicate": "File yang sama sudah pernah diunggah untuk order lain:",
-      "rejectedBecause": "Ditolak: {{reason}}"
+      "rejectedBecause": "Ditolak: {{reason}}",
+      "received": "Sudah diterima",
+      "remaining": "Sisa tagihan",
+      "paid": "Dibayar",
+      "nativeCapture": "Tombol \"Capture\" bawaan Medusa di bagian Payments tidak dipakai untuk transfer bank dan akan ditolak. Konfirmasi di sini setelah dana terlihat di mutasi; itulah yang meng-capture pembayaran.",
+      "underpaidDetail": "{{amount}} diterima, sisa {{remaining}}",
+      "confirmedDetail": "{{amount}} diterima tanggal {{date}}",
+      "reviewedBy": "Dicek oleh {{who}}, {{at}}",
+      "fileDeleted": "File dihapus sesuai masa simpan ({{date}})"
     },
     "status": {
       "awaiting_payment": "Menunggu pembayaran",
@@ -87,7 +121,10 @@
       "proof_rejected": "Bukti transfer ditolak",
       "confirmed": "Pembayaran dikonfirmasi",
       "canceled": "Pembayaran dibatalkan",
-      "refunded": "Refund dicatat"
+      "refunded": "Refund dicatat",
+      "underpaid": "Kurang bayar dicatat",
+      "reminder_sent": "Pengingat pembayaran dikirim",
+      "expired": "Lewat batas waktu, order dibatalkan"
     },
     "actor": {
       "system": "Sistem",
@@ -99,6 +136,33 @@
       "pending": "Menunggu dicek",
       "accepted": "Diterima",
       "rejected": "Ditolak"
+    },
+    "queue": {
+      "label": "Transfer manual",
+      "title": "Transfer manual",
+      "description": "Pembayaran lewat transfer bank. Buka order untuk mengecek bukti lalu konfirmasi, catat kurang bayar, atau tolak.",
+      "order": "Order",
+      "status": "Status",
+      "proof": "Bukti terakhir",
+      "search": "Ref, email, atau #order",
+      "empty": "Kosong",
+      "emptyHint": "Tidak ada pembayaran dengan status ini.",
+      "noMatch": "Tidak ada pembayaran yang cocok",
+      "loadError": "Gagal memuat pembayaran transfer manual.",
+      "tabs": {
+        "awaiting_verification": "Perlu verifikasi",
+        "awaiting_payment": "Menunggu pembayaran",
+        "underpaid": "Kurang bayar",
+        "rejected": "Ditolak",
+        "paid": "Lunas",
+        "expired": "Kedaluwarsa",
+        "canceled": "Dibatalkan",
+        "all": "Semua"
+      }
+    },
+    "credit": {
+      "text": "PG Medusa Transfer Manual · by Haus Kayu, perkakas jati dari Jepara",
+      "help": "Bantuan"
     }
   }
 }

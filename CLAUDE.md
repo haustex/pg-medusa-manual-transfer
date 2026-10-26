@@ -44,8 +44,8 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
 - Referensi **dijamin unik oleh DB**: provider meng-insert ke `manual_transfer_reference` (unique index pada
   `code`, plus index tanpa `WHERE deleted_at` yang ditambahkan manual di migration) lewat `__pg_connection__`, dan
   generate ulang saat `23505` (maks 8 kali, `src/lib/reference-store.ts`). Baris tidak pernah dihapus.
-- **Riwayat pembayaran** ada di `payment.data.history` (`authorized`, `account_substituted`, `confirmed`,
-  `canceled`, `refunded`; Fase 2+: `proof_uploaded`, `proof_rejected`). Riwayat dari storefront dibuang; dimulai di
+- **Riwayat pembayaran** ada di `payment.data.history` (`authorized`, `account_substituted`, `proof_uploaded`,
+  `proof_rejected`, `underpaid`, `confirmed`, `reminder_sent`, `expired`, `canceled`, `refunded`). Riwayat dari storefront dibuang; dimulai di
   authorize. Widget `order.details.side` membacanya lewat `GET /admin/manual-transfer/orders/:id`.
 - Admin: kelas Tailwind responsif (`sm:*`) yang tidak dipakai dashboard tidak ter-generate; pakai kelas dasar.
   Label sidebar memakai `translationNs: "translation"`. Screenshot: container `mt-spike-browser` dari image
@@ -65,8 +65,28 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
 - Rate limit: per IP in-memory per proses (`proofRateLimit`), per order 5/24 jam dihitung di DB. Opsi plugin
   `proofUploads`. Opsi plugin dibaca dari `configModule.plugins` (resolve = nama paket atau path yang berakhiran nama
   paket).
-- Semua workflow yang menulis `payment.data` (upload, tolak, konfirmasi) memakai `acquireLockStep` dengan
-  `paymentLockKey(payment_id)`. Workflow `reject-manual-transfer-proof` sudah ada (API saja); UI-nya di Fase 3.
+- Semua workflow yang menulis `payment.data` (upload, tolak, konfirmasi, kurang bayar, pengingat, kedaluwarsa) memakai
+  `acquireManualTransferLockStep` dengan `paymentLockKey(payment_id)`: Locking Module Medusa kalau
+  `container.hasRegistration("locking")`, selain itu lock in-process + warning sekali (`src/lib/locking.ts`). Provider
+  default Medusa in-memory juga per proses; README menyarankan locking-redis/postgres untuk server+worker.
+- Upload-token via cart id punya budget rate limit sendiri (`proofRateLimit("token")`, `tokenExchangesPerIp`).
+- **Kurang bayar**: transfer sebagian dicatat di `payment.data.receipts`; status `underpaid`, bukti pending ikut
+  `accepted`. Konfirmasi menjumlahkan receipts + nominal ini (`confirmation.total_received`); `underpaid` ditolak kalau
+  nominal sudah menutup tagihan.
+- **Antrean verifikasi** dan job membaca `payment ⋈ order_payment_collection ⋈ order` dengan SQL lewat
+  `PG_CONNECTION` (`src/lib/transfer-queue.ts`), karena Payment Module tidak bisa memfilter `payment.data`.
+- Job `manual-transfer-deadlines` (tiap 15 menit): pengingat sekali (`reminded_at`) untuk `awaiting_payment`,
+  `rejected`, `underpaid` dalam `reminderHours`; kedaluwarsa hanya `awaiting_payment`/`rejected` → status `expired`,
+  lalu `cancelOrderWorkflow.runAsStep` (provider `cancelPayment` mempertahankan `expired`, stok kembali). Job
+  `manual-transfer-proof-retention` (03:30) hanya kalau `proofRetentionDays`: hapus baris `manual_transfer_proof_file`,
+  set `file_deleted_at`; route file → 410, route url → 400.
+- Admin: halaman `/app/manual-transfer` (tab per status, DataTable), aksi di widget order (Drawer konfirmasi / kurang
+  bayar / tolak). `GET /admin/manual-transfer/orders/:id` juga mengembalikan `users` (nama admin di riwayat).
+  `overflow-x-auto` dipasang inline (kelas dashboard tidak lengkap). Footer kredit (`CreditFooter`) hanya di halaman
+  plugin, dari `GET /admin/manual-transfer/config` (`showCredit`).
+- E2E menjalankan job lewat `medusa exec` app uji; proses itu harus di-spawn `detached` (process group sendiri),
+  kalau tidak server uji ikut menerima sinyal stop.
+- Fase 3 (+ a/b/c) diuji E2E: 136/136 cek (Fase 1–3) di mode shared dan split.
 - Fase 2 diuji E2E: 93/93 cek (Fase 1 + 52 cek Fase 2) di mode shared dan split.
 - Id workflow/step memakai prefix `manual-transfer-` agar tidak bentrok dengan plugin lain (lint mewajibkan
   id = nama export/file).

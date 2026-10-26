@@ -7,8 +7,17 @@ import type { SigningSecret } from "./tokens"
  * as opposed to the payment provider's own options.
  */
 export type ManualTransferPluginOptions = {
-  /** Show the small Haus Kayu credit in the Admin (phase 3). Default true. */
+  /** Show the small Haus Kayu credit in the Admin. Default true. */
   showCredit?: boolean
+  /**
+   * Days after a payment was captured or canceled before its proof files are
+   * deleted (the proof records stay). Default null: keep them forever.
+   */
+  proofRetentionDays?: number | null
+  /** Hours before the deadline when the reminder event goes out. Default 24. */
+  reminderHours?: number
+  /** Cancel orders whose deadline passed without payment, releasing the stock. Default true. */
+  autoCancelExpired?: boolean
   /** Secret for guest upload links and signed proof URLs. Default: MANUAL_TRANSFER_SECRET, then http.jwtSecret. */
   secret?: string
   proofUploads?: {
@@ -20,6 +29,10 @@ export type ManualTransferPluginOptions = {
     readsPerIpPerMinute?: number
     /** Proofs one order may receive per 24 hours. Default 5. */
     perOrderPerDay?: number
+    /** Cart-id → upload-token exchanges one IP may make per window. Default 10. */
+    tokenExchangesPerIp?: number
+    /** Window for tokenExchangesPerIp, in minutes. Default 60. */
+    tokenExchangesWindowMinutes?: number
   }
 }
 
@@ -30,7 +43,11 @@ export const DEFAULT_PROOF_LIMITS = {
   perIpWindowMinutes: 15,
   readsPerIpPerMinute: 120,
   perOrderPerDay: 5,
+  tokenExchangesPerIp: 10,
+  tokenExchangesWindowMinutes: 60,
 }
+
+export const DEFAULT_REMINDER_HOURS = 24
 
 function configModule(container: MedusaContainer): ConfigModule {
   return container.resolve(ContainerRegistrationKeys.CONFIG_MODULE)
@@ -50,6 +67,30 @@ export function getPluginOptions(container: MedusaContainer): ManualTransferPlug
 
 export function getProofLimits(container: MedusaContainer) {
   return { ...DEFAULT_PROOF_LIMITS, ...(getPluginOptions(container).proofUploads ?? {}) }
+}
+
+/** proofRetentionDays as a whole number of days ≥ 1, or null to keep proofs forever */
+export function getProofRetentionDays(container: MedusaContainer): number | null {
+  const days = getPluginOptions(container).proofRetentionDays
+  if (days === null || days === undefined) {
+    return null
+  }
+  if (!Number.isInteger(days) || days < 1) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "manual transfer: proofRetentionDays must be a whole number of days (1 or more), or null"
+    )
+  }
+  return days
+}
+
+export function getDeadlineOptions(container: MedusaContainer) {
+  const options = getPluginOptions(container)
+  const hours = options.reminderHours ?? DEFAULT_REMINDER_HOURS
+  return {
+    reminderHours: Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_REMINDER_HOURS,
+    autoCancelExpired: options.autoCancelExpired !== false,
+  }
 }
 
 export function getSigningSecret(container: MedusaContainer): SigningSecret {

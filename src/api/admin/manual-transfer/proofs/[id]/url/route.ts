@@ -12,11 +12,17 @@ export async function GET(req: AuthenticatedMedusaRequest, res: MedusaResponse) 
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = await query.graph({
     entity: "manual_transfer_proof",
-    fields: ["id"],
+    fields: ["id", "file_deleted_at"],
     filters: { id: req.params.id },
   })
   if (!data[0]) {
     throw new MedusaError(MedusaError.Types.NOT_FOUND, `Proof ${req.params.id} not found`)
+  }
+  if (data[0].file_deleted_at) {
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      "The file of this proof was deleted under the proof retention setting"
+    )
   }
   const { path, expires_at } = signProofPath(getSigningSecret(req.scope), data[0].id)
   res.json({ url: path, expires_at })

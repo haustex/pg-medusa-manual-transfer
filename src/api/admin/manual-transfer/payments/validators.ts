@@ -8,3 +8,15 @@ export const PostAdminConfirmPayment = z.object({
   accept_shortfall: z.boolean().optional(),
 })
 export type PostAdminConfirmPaymentType = z.infer<typeof PostAdminConfirmPayment>
+
+export const PostAdminRecordUnderpayment = PostAdminConfirmPayment.omit({ accept_shortfall: true })
+export type PostAdminRecordUnderpaymentType = z.infer<typeof PostAdminRecordUnderpayment>
+
+export const GetAdminTransfers = z.object({
+  status: z
+    .enum(["awaiting_payment", "awaiting_verification", "paid", "underpaid", "rejected", "expired", "canceled"])
+    .optional(),
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+})

@@ -20,6 +20,25 @@ export type TransferAccount = {
   currency_code: string
 }
 
+export type TransferReceipt = {
+  amount: number
+  received_at: string
+  bank_reference: string | null
+  note: string | null
+  recorded_by: string | null
+  recorded_at: string
+}
+
+export type TransferConfirmation = {
+  amount_received: number
+  total_received?: number
+  received_at: string
+  bank_reference: string | null
+  note: string | null
+  confirmed_by: string | null
+  confirmed_at: string
+}
+
 export type OrderTransferPayment = {
   id: string
   amount: number
@@ -31,6 +50,9 @@ export type OrderTransferPayment = {
     account?: TransferAccount
     status?: string
     expires_at?: string
+    reminded_at?: string
+    confirmation?: TransferConfirmation
+    receipts?: TransferReceipt[]
     history?: TransferHistoryEntry[]
   }
 }
@@ -45,24 +67,113 @@ export type TransferProof = {
   uploaded_by: "customer" | "guest"
   note: string | null
   duplicate_of_order_id: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  file_deleted_at: string | null
   created_at: string
 }
 
-export type OrderTransfer = { payment: OrderTransferPayment; proofs: TransferProof[] }
+export type TransferUser = { email: string; name: string | null }
+
+export type OrderTransfer = {
+  order_status: string
+  payment: OrderTransferPayment
+  /** Partial transfers recorded so far */
+  amount_received: number
+  proofs: TransferProof[]
+  users: Record<string, TransferUser>
+}
 
 export const orderTransferQueryKey = (orderId: string) => ["manual-transfer-order", orderId]
 
 /** null when the order was not paid by manual transfer */
 export async function getOrderTransfer(orderId: string): Promise<OrderTransfer | null> {
   try {
-    const { payment, proofs } = await sdk.client.fetch<OrderTransfer>(`/admin/manual-transfer/orders/${orderId}`)
-    return { payment, proofs }
+    return await sdk.client.fetch<OrderTransfer>(`/admin/manual-transfer/orders/${orderId}`)
   } catch (error) {
     if (error instanceof FetchError && error.status === 404) {
       return null
     }
     throw error
   }
+}
+
+export type TransferAmountInput = {
+  amount_received: number
+  received_at: string
+  bank_reference?: string | null
+  note?: string | null
+}
+
+export function confirmPayment(paymentId: string, body: TransferAmountInput & { accept_shortfall?: boolean }) {
+  return sdk.client.fetch(`/admin/manual-transfer/payments/${paymentId}/confirm`, { method: "POST", body })
+}
+
+export function recordUnderpayment(paymentId: string, body: TransferAmountInput) {
+  return sdk.client.fetch(`/admin/manual-transfer/payments/${paymentId}/underpaid`, { method: "POST", body })
+}
+
+export function rejectProof(proofId: string, reason: string) {
+  return sdk.client.fetch(`/admin/manual-transfer/proofs/${proofId}/reject`, { method: "POST", body: { reason } })
+}
+
+export type TransferListRow = {
+  payment_id: string
+  order_id: string
+  display_id: number | null
+  email: string | null
+  amount: number
+  currency_code: string
+  status: string | null
+  reference: string | null
+  expires_at: string | null
+  created_at: string
+  last_proof_at: string | null
+}
+
+export type TransferList = {
+  payments: TransferListRow[]
+  count: number
+  counts: Record<string, number>
+}
+
+export const TRANSFERS_QUERY_KEY = ["manual-transfer-payments"]
+
+export function listTransfers(params: { status?: string; q?: string; limit: number; offset: number }) {
+  return sdk.client.fetch<TransferList>("/admin/manual-transfer/payments", {
+    query: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== "")),
+  })
+}
+
+export type PluginConfig = { show_credit: boolean; proof_retention_days: number | null }
+
+export const CONFIG_QUERY_KEY = ["manual-transfer-config"]
+
+export function getPluginConfig() {
+  return sdk.client.fetch<PluginConfig>("/admin/manual-transfer/config")
+}
+
+/** Statuses in which an admin can still confirm or record money (mirrors CONFIRMABLE_STATUSES) */
+export const OPEN_STATUSES = ["awaiting_payment", "awaiting_verification", "underpaid", "rejected"]
+
+/** Today in the browser's time zone, YYYY-MM-DD */
+export function today(): string {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/** Rounds away float noise from sums of amounts (to 1/10000 of a unit) */
+export function roundAmount(value: number): number {
+  return Math.round(value * 10000) / 10000
+}
+
+export function userLabel(users: Record<string, TransferUser> | undefined, id: string | null): string | null {
+  if (!id) {
+    return null
+  }
+  const user = users?.[id]
+  return user ? user.name || user.email : id
 }
 
 /** Opens a proof through a fresh 5-minute signed link (opened first, so popup blockers allow it) */
@@ -93,7 +204,16 @@ export function formatAmount(amount: number, currencyCode: string, locale?: stri
   }
 }
 
-export function formatDateTime(value: string | undefined, locale?: string): string {
+export function formatDate(value: string | null | undefined, locale?: string): string {
+  if (!value) {
+    return "-"
+  }
+  // YYYY-MM-DD from a bank statement: show it as that calendar day, whatever the time zone
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value)
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date)
+}
+
+export function formatDateTime(value: string | null | undefined, locale?: string): string {
   if (!value) {
     return "-"
   }

@@ -1,4 +1,5 @@
 import type { PaymentSessionStatus } from "@medusajs/framework/types"
+import { MathBN } from "@medusajs/framework/utils"
 import type { AccountSnapshot } from "./accounts"
 
 /**
@@ -47,20 +48,49 @@ export function paymentLockKey(paymentId: string): string {
   return `manual-transfer:payment:${paymentId}`
 }
 
+/** Statuses the expiry job cancels once the deadline passed (not when a proof awaits review or money arrived) */
+export const EXPIRABLE_STATUSES: readonly ManualTransferStatus[] = [
+  MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
+  MANUAL_TRANSFER_STATUS.REJECTED,
+]
+
+/** Statuses in which the buyer still owes money and gets a reminder before the deadline */
+export const REMINDABLE_STATUSES: readonly ManualTransferStatus[] = [
+  MANUAL_TRANSFER_STATUS.AWAITING_PAYMENT,
+  MANUAL_TRANSFER_STATUS.REJECTED,
+  MANUAL_TRANSFER_STATUS.UNDERPAID,
+]
+
 export const MANUAL_TRANSFER_EVENTS = {
   PROOF_UPLOADED: "manual_transfer.proof_uploaded",
   PROOF_REJECTED: "manual_transfer.proof_rejected",
   PAYMENT_CONFIRMED: "manual_transfer.payment_confirmed",
+  PAYMENT_UNDERPAID: "manual_transfer.payment_underpaid",
+  PAYMENT_REMINDER: "manual_transfer.payment_reminder",
+  PAYMENT_EXPIRED: "manual_transfer.payment_expired",
 } as const
 
 export type ManualTransferConfirmation = {
+  /** What arrived with this (last) transfer */
   amount_received: number
+  /** Everything received for the order, earlier partial transfers included */
+  total_received?: number
   /** Date the money arrived according to the bank statement (YYYY-MM-DD) */
   received_at: string
   bank_reference: string | null
   note: string | null
   confirmed_by: string | null
   confirmed_at: string
+}
+
+/** A partial transfer an admin recorded as "underpaid" */
+export type ManualTransferReceipt = {
+  amount: number
+  received_at: string
+  bank_reference: string | null
+  note: string | null
+  recorded_by: string | null
+  recorded_at: string
 }
 
 export type ManualTransferRefund = {
@@ -74,7 +104,10 @@ export const HISTORY_EVENT = {
   ACCOUNT_SUBSTITUTED: "account_substituted",
   PROOF_UPLOADED: "proof_uploaded",
   PROOF_REJECTED: "proof_rejected",
+  UNDERPAID: "underpaid",
   CONFIRMED: "confirmed",
+  REMINDER_SENT: "reminder_sent",
+  EXPIRED: "expired",
   CANCELED: "canceled",
   REFUNDED: "refunded",
 } as const
@@ -131,6 +164,8 @@ export type ManualTransferPaymentData = {
   authorized_at?: string
   expires_at?: string
   confirmation?: ManualTransferConfirmation
+  receipts?: ManualTransferReceipt[]
+  reminded_at?: string
   canceled_at?: string
   refunds?: ManualTransferRefund[]
   history?: ManualTransferHistoryEntry[]
@@ -147,6 +182,8 @@ const KEYS = [
   "authorized_at",
   "expires_at",
   "confirmation",
+  "receipts",
+  "reminded_at",
   "canceled_at",
   "refunds",
   "history",
@@ -163,6 +200,12 @@ export function pickPaymentData(data: Record<string, unknown> | undefined, keys:
     }
   }
   return picked as Picked
+}
+
+/** Sum of the partial transfers recorded so far */
+export function receivedSoFar(data: { receipts?: unknown } | undefined): number {
+  const receipts = Array.isArray(data?.receipts) ? (data!.receipts as ManualTransferReceipt[]) : []
+  return receipts.reduce((sum, receipt) => MathBN.add(sum, receipt.amount ?? 0), MathBN.convert(0)).toNumber()
 }
 
 /** How Medusa should see a payment in a given manual-transfer status */

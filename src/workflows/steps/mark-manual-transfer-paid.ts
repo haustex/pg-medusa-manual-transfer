@@ -37,6 +37,7 @@ export const markManualTransferPaidStep = createStep(
           note: input.confirmation.note,
           details: {
             amount_received: input.confirmation.amount_received,
+            total_received: input.confirmation.total_received,
             received_at: input.confirmation.received_at,
             bank_reference: input.confirmation.bank_reference,
           },

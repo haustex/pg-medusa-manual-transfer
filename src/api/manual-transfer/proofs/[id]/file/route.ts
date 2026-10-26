@@ -19,12 +19,16 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = await query.graph({
     entity: "manual_transfer_proof",
-    fields: ["id", "file_id", "filename", "mime_type", "size"],
+    fields: ["id", "file_id", "filename", "mime_type", "size", "file_deleted_at"],
     filters: { id: req.params.id },
   })
   const proof = data[0]
   if (!proof) {
     res.status(404).json({ type: "not_found", message: "Not found" })
+    return
+  }
+  if (proof.file_deleted_at) {
+    res.status(410).json({ type: "not_found", message: "This file was deleted under the proof retention setting" })
     return
   }
   // The content column is only read here, through the module service

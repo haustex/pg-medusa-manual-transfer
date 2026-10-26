@@ -1,4 +1,4 @@
-import { acquireLockStep, emitEventStep, releaseLockStep } from "@medusajs/medusa/core-flows"
+import { emitEventStep } from "@medusajs/medusa/core-flows"
 import { createWorkflow, transform, WorkflowResponse } from "@medusajs/framework/workflows-sdk"
 import {
   appendHistory,
@@ -8,7 +8,9 @@ import {
   MANUAL_TRANSFER_STATUS,
   paymentLockKey,
 } from "../lib/payment-data"
+import { acquireManualTransferLockStep } from "./steps/acquire-manual-transfer-lock"
 import { loadManualTransferProofStep } from "./steps/load-manual-transfer-proof"
+import { releaseManualTransferLockStep } from "./steps/release-manual-transfer-lock"
 import { reviewManualTransferProofsStep } from "./steps/review-manual-transfer-proofs"
 import { updateManualTransferPaymentDataStep } from "./steps/update-manual-transfer-payment-data"
 import { validateManualTransferProofRejectionStep } from "./steps/validate-manual-transfer-proof-rejection"
@@ -29,7 +31,7 @@ export const rejectManualTransferProofWorkflow = createWorkflow(
   function (input: RejectManualTransferProofInput) {
     const located = loadManualTransferProofStep({ proof_id: input.proof_id })
     const lockKey = transform({ located }, ({ located }) => paymentLockKey(located.payment_id))
-    acquireLockStep({ key: lockKey, timeout: 5, ttl: 30 })
+    acquireManualTransferLockStep({ key: lockKey, timeout: 5, ttl: 30 })
 
     const validated = validateManualTransferProofRejectionStep({ proof_id: input.proof_id })
 
@@ -69,7 +71,7 @@ export const rejectManualTransferProofWorkflow = createWorkflow(
       eventName: MANUAL_TRANSFER_EVENTS.PROOF_REJECTED,
       data: transform({ located }, ({ located }) => ({ id: located.id, order_id: located.order_id })),
     })
-    releaseLockStep({ key: lockKey })
+    releaseManualTransferLockStep({ key: lockKey })
 
     return new WorkflowResponse(transform({ reviewed }, ({ reviewed }) => reviewed[0]))
   }

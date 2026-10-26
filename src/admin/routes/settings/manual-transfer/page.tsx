@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { AccountForm, cleanAccountInput, isAccountInputComplete } from "../../../components/account-form"
+import { CreditFooter } from "../../../components/credit-footer"
 import {
   AccountInput,
   ACCOUNTS_QUERY_KEY,
@@ -283,45 +284,48 @@ const ManualTransferSettingsPage = () => {
   const accounts = data?.accounts ?? []
 
   return (
-    <Container className="divide-y p-0">
-      <div className="flex items-start justify-between gap-x-4 px-6 py-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-y-1">
-          <Heading level="h2">{t("manualTransfer.settings.title")}</Heading>
-          <Text size="small" leading="compact" className="text-ui-fg-subtle">
-            {t("manualTransfer.settings.description")}
-          </Text>
+    <div className="flex flex-col gap-y-3">
+      <Container className="divide-y p-0">
+        <div className="flex items-start justify-between gap-x-4 px-6 py-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-y-1">
+            <Heading level="h2">{t("manualTransfer.settings.title")}</Heading>
+            <Text size="small" leading="compact" className="text-ui-fg-subtle">
+              {t("manualTransfer.settings.description")}
+            </Text>
+          </div>
+          <CreateAccountModal />
         </div>
-        <CreateAccountModal />
-      </div>
-      {isLoading && (
-        <div className="flex justify-center px-6 py-4">
-          <Spinner className="text-ui-fg-subtle animate-spin" />
-        </div>
-      )}
-      {isError && (
-        <div className="px-6 py-4">
-          <Text size="small" className="text-ui-fg-error">
-            {t("manualTransfer.settings.loadError")}
-          </Text>
-        </div>
-      )}
-      {!isLoading && !isError && accounts.length === 0 && (
-        <div className="px-6 py-4">
-          <Text size="small" className="text-ui-fg-subtle">
-            {t("manualTransfer.settings.empty")}
-          </Text>
-        </div>
-      )}
-      {accounts.map((account) => (
-        <AccountRow
-          key={account.id}
-          account={account}
-          regionNames={regionNames}
-          onEdit={() => setEditing(account)}
-        />
-      ))}
-      <EditAccountDrawer account={editing} onClose={() => setEditing(null)} />
-    </Container>
+        {isLoading && (
+          <div className="flex justify-center px-6 py-4">
+            <Spinner className="text-ui-fg-subtle animate-spin" />
+          </div>
+        )}
+        {isError && (
+          <div className="px-6 py-4">
+            <Text size="small" className="text-ui-fg-error">
+              {t("manualTransfer.settings.loadError")}
+            </Text>
+          </div>
+        )}
+        {!isLoading && !isError && accounts.length === 0 && (
+          <div className="px-6 py-4">
+            <Text size="small" className="text-ui-fg-subtle">
+              {t("manualTransfer.settings.empty")}
+            </Text>
+          </div>
+        )}
+        {accounts.map((account) => (
+          <AccountRow
+            key={account.id}
+            account={account}
+            regionNames={regionNames}
+            onEdit={() => setEditing(account)}
+          />
+        ))}
+        <EditAccountDrawer account={editing} onClose={() => setEditing(null)} />
+      </Container>
+      <CreditFooter />
+    </div>
   )
 }
 

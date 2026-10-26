@@ -34,7 +34,30 @@
       "deactivate": "Deactivate",
       "delete": "Delete",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "confirm": "Confirm paid",
+      "recordUnderpaid": "Underpaid",
+      "reject": "Reject",
+      "confirmTitle": "Confirm payment",
+      "underpaidTitle": "Record an underpayment",
+      "underpaidText": "Less than the amount due arrived. The transfer is recorded, the order shows what is left, and the buyer can upload a proof for the rest. Nothing is captured yet.",
+      "rejectTitle": "Reject payment proof",
+      "bankCheckTitle": "Check the bank statement first",
+      "bankCheck": "Look for the transfer in your banking app or the account statement. Never rely on the proof image alone: proofs are easy to fake.",
+      "amountReceived": "Amount received ({{currency}})",
+      "receivedAt": "Date received (per bank statement)",
+      "bankReference": "Bank reference",
+      "bankReferenceHint": "Optional, e.g. the transaction id in the statement",
+      "note": "Note (internal)",
+      "shortfallTitle": "{{amount}} less than the amount due",
+      "shortfallText": "Record it as underpaid so the buyer pays the rest, or confirm anyway if the store absorbs the difference (e.g. bank fees).",
+      "acceptShortfall": "Confirm as paid anyway; the store absorbs {{amount}}",
+      "thisTransfer": "This transfer",
+      "leftToPay": "Left to pay",
+      "coversAll": "This covers the whole amount due. Use \"Confirm paid\" instead.",
+      "reason": "Reason",
+      "reasonPlaceholder": "e.g. The amount on the proof is not readable",
+      "reasonHint": "The buyer sees this reason and can upload a new proof."
     },
     "titles": {
       "create": "Add bank account",
@@ -47,7 +70,10 @@
     "toasts": {
       "created": "Bank account added",
       "updated": "Bank account saved",
-      "deleted": "Bank account deleted"
+      "deleted": "Bank account deleted",
+      "confirmed": "Payment confirmed and captured",
+      "underpaid": "Underpayment recorded",
+      "rejected": "Payment proof rejected"
     },
     "widget": {
       "title": "Manual transfer",
@@ -69,7 +95,15 @@
       "noProofs": "No proof uploaded yet.",
       "view": "View",
       "duplicate": "The same file was already uploaded for another order:",
-      "rejectedBecause": "Rejected: {{reason}}"
+      "rejectedBecause": "Rejected: {{reason}}",
+      "received": "Received so far",
+      "remaining": "Still to pay",
+      "paid": "Paid",
+      "nativeCapture": "Medusa's own \"Capture\" button in the Payments section is not used for bank transfers and is refused. Confirm here once the money is in the bank statement; that captures the payment.",
+      "underpaidDetail": "{{amount}} received, {{remaining}} still to pay",
+      "confirmedDetail": "{{amount}} received on {{date}}",
+      "reviewedBy": "Reviewed by {{who}}, {{at}}",
+      "fileDeleted": "File deleted under the retention setting ({{date}})"
     },
     "status": {
       "awaiting_payment": "Awaiting payment",
@@ -87,7 +121,10 @@
       "proof_rejected": "Payment proof rejected",
       "confirmed": "Payment confirmed",
       "canceled": "Payment canceled",
-      "refunded": "Refund recorded"
+      "refunded": "Refund recorded",
+      "underpaid": "Underpayment recorded",
+      "reminder_sent": "Payment reminder sent",
+      "expired": "Deadline passed, order canceled"
     },
     "actor": {
       "system": "System",
@@ -99,6 +136,33 @@
       "pending": "Pending review",
       "accepted": "Accepted",
       "rejected": "Rejected"
+    },
+    "queue": {
+      "label": "Manual transfers",
+      "title": "Manual transfers",
+      "description": "Payments by bank transfer. Open an order to check its proof and confirm, record an underpayment or reject.",
+      "order": "Order",
+      "status": "Status",
+      "proof": "Last proof",
+      "search": "Ref, e-mail or #order",
+      "empty": "Nothing here",
+      "emptyHint": "No payments in this status.",
+      "noMatch": "No payments match the search",
+      "loadError": "Could not load the manual transfer payments.",
+      "tabs": {
+        "awaiting_verification": "Needs verification",
+        "awaiting_payment": "Awaiting payment",
+        "underpaid": "Underpaid",
+        "rejected": "Rejected",
+        "paid": "Paid",
+        "expired": "Expired",
+        "canceled": "Canceled",
+        "all": "All"
+      }
+    },
+    "credit": {
+      "text": "PG Medusa Transfer Manual · by Haus Kayu, perkakas jati dari Jepara",
+      "help": "Help"
     }
   }
 }

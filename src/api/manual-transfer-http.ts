@@ -4,10 +4,10 @@ import type {
   MedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
-import { MedusaError } from "@medusajs/framework/utils"
+import { MathBN, MedusaError } from "@medusajs/framework/utils"
 import multer from "multer"
 import { OrderTransfer } from "../lib/order-transfer"
-import { UPLOADABLE_STATUSES, ManualTransferStatus } from "../lib/payment-data"
+import { ManualTransferStatus, receivedSoFar, UPLOADABLE_STATUSES } from "../lib/payment-data"
 import { getProofLimits, getSigningSecret } from "../lib/plugin-options"
 import { MAX_PROOF_BYTES } from "../lib/proof-file"
 import { RateLimiter } from "../lib/rate-limit"
@@ -32,6 +32,7 @@ export const PROOF_FIELDS = [
   "customer_id",
   "note",
   "duplicate_of_order_id",
+  "file_deleted_at",
   "created_at",
 ] as const
 
@@ -56,6 +57,7 @@ export function pickFields<T extends readonly string[]>(record: ProofLike, field
 export function buyerView(transfer: OrderTransfer, proofs: ProofLike[]) {
   const { order, payment } = transfer
   const status = payment.data.status as ManualTransferStatus | undefined
+  const received = receivedSoFar(payment.data)
   return {
     order_id: order.id,
     display_id: order.display_id,
@@ -63,6 +65,9 @@ export function buyerView(transfer: OrderTransfer, proofs: ProofLike[]) {
     status: status ?? null,
     amount: payment.amount,
     currency_code: payment.currency_code,
+    /** Partial transfers an admin recorded so far, and what is left to pay */
+    amount_received: received,
+    amount_remaining: MathBN.max(MathBN.sub(payment.amount, received), 0).toNumber(),
     expires_at: payment.data.expires_at ?? null,
     account: payment.data.account ?? null,
     can_upload:
@@ -110,14 +115,16 @@ export function tooManyRequests(res: MedusaResponse, retryAfterSeconds: number, 
 
 const limiters = new Map<string, RateLimiter>()
 
-/** Per-IP limit for the public proof routes ("upload" or "read") */
-export function proofRateLimit(kind: "upload" | "read") {
+/** Per-IP limit for the public proof routes: uploads, reads, and cart → token exchanges, each counted apart */
+export function proofRateLimit(kind: "upload" | "read" | "token") {
   return (req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction) => {
     const limits = getProofLimits(req.scope)
     const [limit, windowMs] =
       kind === "upload"
         ? [limits.perIp, limits.perIpWindowMinutes * 60_000]
-        : [limits.readsPerIpPerMinute, 60_000]
+        : kind === "token"
+          ? [limits.tokenExchangesPerIp, limits.tokenExchangesWindowMinutes * 60_000]
+          : [limits.readsPerIpPerMinute, 60_000]
     const id = `${kind}:${limit}:${windowMs}`
     let limiter = limiters.get(id)
     if (!limiter) {

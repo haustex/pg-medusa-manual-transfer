@@ -1,4 +1,11 @@
-import { DEFAULT_PROOF_LIMITS, getPluginOptions, getProofLimits, getSigningSecret } from "../plugin-options"
+import {
+  DEFAULT_PROOF_LIMITS,
+  getDeadlineOptions,
+  getPluginOptions,
+  getProofLimits,
+  getProofRetentionDays,
+  getSigningSecret,
+} from "../plugin-options"
 
 function container(config: Record<string, unknown>) {
   return { resolve: () => config } as never
@@ -16,6 +23,32 @@ describe("plugin options", () => {
   it("merges proof limits over the defaults", () => {
     const c = container({ plugins: [{ resolve: "medusa-payment-manual-transfer", options: { proofUploads: { perOrderPerDay: 2 } } }] })
     expect(getProofLimits(c)).toEqual({ ...DEFAULT_PROOF_LIMITS, perOrderPerDay: 2 })
+  })
+})
+
+describe("proofRetentionDays and deadline options", () => {
+  const withOptions = (options: Record<string, unknown>) =>
+    container({ plugins: [{ resolve: "medusa-payment-manual-transfer", options }] })
+
+  it("keeps proofs forever by default and accepts whole days", () => {
+    expect(getProofRetentionDays(container({}))).toBeNull()
+    expect(getProofRetentionDays(withOptions({ proofRetentionDays: null }))).toBeNull()
+    expect(getProofRetentionDays(withOptions({ proofRetentionDays: 90 }))).toBe(90)
+    expect(() => getProofRetentionDays(withOptions({ proofRetentionDays: 0 }))).toThrow(/whole number/)
+    expect(() => getProofRetentionDays(withOptions({ proofRetentionDays: 1.5 }))).toThrow(/whole number/)
+  })
+
+  it("reminds 24 h ahead and auto-cancels unless turned off", () => {
+    expect(getDeadlineOptions(container({}))).toEqual({ reminderHours: 24, autoCancelExpired: true })
+    expect(getDeadlineOptions(withOptions({ reminderHours: 6, autoCancelExpired: false }))).toEqual({
+      reminderHours: 6,
+      autoCancelExpired: false,
+    })
+    expect(getDeadlineOptions(withOptions({ reminderHours: -1 })).reminderHours).toBe(24)
+  })
+
+  it("has its own token-exchange limit", () => {
+    expect(getProofLimits(container({}))).toMatchObject({ tokenExchangesPerIp: 10, tokenExchangesWindowMinutes: 60 })
   })
 })
 

@@ -1,12 +1,9 @@
-import {
-  acquireLockStep,
-  capturePaymentWorkflow,
-  emitEventStep,
-  releaseLockStep,
-} from "@medusajs/medusa/core-flows"
+import { capturePaymentWorkflow, emitEventStep } from "@medusajs/medusa/core-flows"
 import { createWorkflow, transform, WorkflowResponse } from "@medusajs/framework/workflows-sdk"
 import { MANUAL_TRANSFER_EVENTS, ManualTransferConfirmation, paymentLockKey } from "../lib/payment-data"
+import { acquireManualTransferLockStep } from "./steps/acquire-manual-transfer-lock"
 import { markManualTransferPaidStep } from "./steps/mark-manual-transfer-paid"
+import { releaseManualTransferLockStep } from "./steps/release-manual-transfer-lock"
 import { reviewManualTransferProofsStep } from "./steps/review-manual-transfer-proofs"
 import { validateManualTransferConfirmationStep } from "./steps/validate-manual-transfer-confirmation"
 
@@ -26,19 +23,21 @@ export type ConfirmManualTransferPaymentInput = {
  * The only way a manual transfer gets captured: an admin who checked the bank
  * statement confirms it, the confirmation is written to the payment data, and
  * Medusa's capture runs (marking the order paid), and a pending proof is
- * accepted. If anything fails, the payment data is restored.
+ * accepted. Partial transfers recorded earlier count towards the amount due.
+ * If anything fails, the payment data is restored.
  */
 export const confirmManualTransferPaymentWorkflow = createWorkflow(
   "confirm-manual-transfer-payment",
   function (input: ConfirmManualTransferPaymentInput) {
     const lockKey = transform({ input }, ({ input }) => paymentLockKey(input.payment_id))
-    acquireLockStep({ key: lockKey, timeout: 5, ttl: 30 })
+    acquireManualTransferLockStep({ key: lockKey, timeout: 5, ttl: 30 })
 
     const payment = validateManualTransferConfirmationStep(input)
 
     const markInput = transform({ input, payment }, ({ input, payment }) => {
       const confirmation: ManualTransferConfirmation = {
         amount_received: input.amount_received,
+        total_received: payment.total_received,
         received_at: input.received_at,
         bank_reference: input.bank_reference ?? null,
         note: input.note ?? null,
@@ -69,7 +68,7 @@ export const confirmManualTransferPaymentWorkflow = createWorkflow(
       eventName: MANUAL_TRANSFER_EVENTS.PAYMENT_CONFIRMED,
       data: transform({ input }, ({ input }) => ({ id: input.payment_id })),
     })
-    releaseLockStep({ key: lockKey })
+    releaseManualTransferLockStep({ key: lockKey })
 
     return new WorkflowResponse(captured)
   }
