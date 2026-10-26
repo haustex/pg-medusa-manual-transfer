@@ -61,6 +61,17 @@ export const REMINDABLE_STATUSES: readonly ManualTransferStatus[] = [
   MANUAL_TRANSFER_STATUS.UNDERPAID,
 ]
 
+/**
+ * Statuses that wait for an admin, with the history event that started the
+ * wait: a proof to verify, or an underpayment to follow up.
+ */
+export const ADMIN_FOLLOW_UP = {
+  [MANUAL_TRANSFER_STATUS.AWAITING_VERIFICATION]: "proof_uploaded",
+  [MANUAL_TRANSFER_STATUS.UNDERPAID]: "underpaid",
+} as const
+
+export type AdminFollowUpStatus = keyof typeof ADMIN_FOLLOW_UP
+
 export const MANUAL_TRANSFER_EVENTS = {
   PROOF_UPLOADED: "manual_transfer.proof_uploaded",
   PROOF_REJECTED: "manual_transfer.proof_rejected",
@@ -68,6 +79,8 @@ export const MANUAL_TRANSFER_EVENTS = {
   PAYMENT_UNDERPAID: "manual_transfer.payment_underpaid",
   PAYMENT_REMINDER: "manual_transfer.payment_reminder",
   PAYMENT_EXPIRED: "manual_transfer.payment_expired",
+  /** Payments waiting too long for an admin (data: { payment_ids }) */
+  ADMIN_OVERDUE: "manual_transfer.admin_overdue",
 } as const
 
 export type ManualTransferConfirmation = {
@@ -166,6 +179,8 @@ export type ManualTransferPaymentData = {
   confirmation?: ManualTransferConfirmation
   receipts?: ManualTransferReceipt[]
   reminded_at?: string
+  /** When the admins were last told this payment waits for them (see adminReminders) */
+  admin_reminded_at?: string
   canceled_at?: string
   refunds?: ManualTransferRefund[]
   history?: ManualTransferHistoryEntry[]
@@ -184,6 +199,7 @@ const KEYS = [
   "confirmation",
   "receipts",
   "reminded_at",
+  "admin_reminded_at",
   "canceled_at",
   "refunds",
   "history",

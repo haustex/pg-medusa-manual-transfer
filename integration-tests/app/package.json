@@ -1,0 +1,10 @@
+{
+  "name": "mt-e2e-app",
+  "private": true,
+  "description": "Medusa app the E2E suite runs the plugin in; node_modules is linked by integration-tests/setup.mjs",
+  "dependencies": {
+    "@medusajs/cli": "2.19.0",
+    "@medusajs/framework": "2.19.0",
+    "@medusajs/medusa": "2.19.0"
+  }
+}

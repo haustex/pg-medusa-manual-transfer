@@ -18,6 +18,7 @@ import {
   formatDateTime,
   formatSize,
   getOrderTransfer,
+  invoiceUrl,
   OPEN_STATUSES,
   openProof,
   OrderTransfer,
@@ -254,6 +255,17 @@ const OrderManualTransferWidget = ({ data: order }: DetailWidgetProps<HttpTypes.
             </Text>
             {data.reference && <Copy content={data.reference} />}
           </div>
+        </Row>
+        <Row label={t("manualTransfer.widget.invoice")}>
+          <a
+            href={invoiceUrl(order.id, i18n.language)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-ui-fg-interactive hover:text-ui-fg-interactive-hover txt-compact-small inline-flex items-center gap-x-1"
+          >
+            {t("manualTransfer.widget.invoicePdf")}
+            <ArrowUpRightOnBox />
+          </a>
         </Row>
         <Row label={t("manualTransfer.widget.amount")}>
           <Text size="small" leading="compact">

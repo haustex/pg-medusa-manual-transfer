@@ -73,7 +73,8 @@
       "deleted": "Bank account deleted",
       "confirmed": "Payment confirmed and captured",
       "underpaid": "Underpayment recorded",
-      "rejected": "Payment proof rejected"
+      "rejected": "Payment proof rejected",
+      "storeSaved": "Store details saved"
     },
     "widget": {
       "title": "Manual transfer",
@@ -103,7 +104,9 @@
       "underpaidDetail": "{{amount}} received, {{remaining}} still to pay",
       "confirmedDetail": "{{amount}} received on {{date}}",
       "reviewedBy": "Reviewed by {{who}}, {{at}}",
-      "fileDeleted": "File deleted under the retention setting ({{date}})"
+      "fileDeleted": "File deleted under the retention setting ({{date}})",
+      "invoice": "Invoice",
+      "invoicePdf": "Pro-forma PDF"
     },
     "status": {
       "awaiting_payment": "Awaiting payment",
@@ -149,6 +152,9 @@
       "emptyHint": "No payments in this status.",
       "noMatch": "No payments match the search",
       "loadError": "Could not load the manual transfer payments.",
+      "late": "Late",
+      "lateCount": "{{count}} late",
+      "lateHint": "Waiting for an admin since {{date}}",
       "tabs": {
         "awaiting_verification": "Needs verification",
         "awaiting_payment": "Awaiting payment",
@@ -158,6 +164,33 @@
         "expired": "Expired",
         "canceled": "Canceled",
         "all": "All"
+      }
+    },
+    "identity": {
+      "title": "Store details for e-mails and invoices",
+      "description": "Buyers see this name, logo and contact details in the payment e-mails and on the pro-forma invoice.",
+      "preview": "Preview",
+      "noContact": "No contact details yet.",
+      "name": "Store name",
+      "logo": "Logo URL",
+      "logoHint": "PNG or JPG, shown in e-mails and on the invoice.",
+      "address": "Address",
+      "email": "Contact e-mail",
+      "emailHint": "Shown to buyers; replies go to the sender address of your e-mail provider.",
+      "phone": "Phone",
+      "website": "Website",
+      "templates": {
+        "order_placed": "Order placed (instructions)",
+        "proof_received": "Proof received",
+        "proof_rejected": "Proof rejected",
+        "payment_underpaid": "Underpaid",
+        "payment_confirmed": "Payment confirmed",
+        "payment_reminder": "Payment reminder",
+        "payment_expired": "Expired, order canceled",
+        "payment_canceled": "Order canceled",
+        "admin_status_changed": "Admin: status changed",
+        "admin_overdue": "Admin: payments waiting",
+        "invoice": "Pro-forma invoice (PDF)"
       }
     },
     "credit": {

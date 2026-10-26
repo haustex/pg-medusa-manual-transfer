@@ -46,6 +46,11 @@ export default defineMiddlewares({
       middlewares: [proofRateLimit("read"), optionalCustomer],
     },
     {
+      matcher: "/store/manual-transfer/orders/:id/invoice",
+      method: "GET",
+      middlewares: [proofRateLimit("read"), optionalCustomer],
+    },
+    {
       matcher: "/store/manual-transfer/orders/:id/proofs",
       method: "POST",
       // Rate limit before the body is buffered

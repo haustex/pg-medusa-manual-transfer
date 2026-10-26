@@ -84,8 +84,32 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   bayar / tolak). `GET /admin/manual-transfer/orders/:id` juga mengembalikan `users` (nama admin di riwayat).
   `overflow-x-auto` dipasang inline (kelas dashboard tidak lengkap). Footer kredit (`CreditFooter`) hanya di halaman
   plugin, dari `GET /admin/manual-transfer/config` (`showCredit`).
-- E2E menjalankan job lewat `medusa exec` app uji; proses itu harus di-spawn `detached` (process group sendiri),
-  kalau tidak server uji ikut menerima sinyal stop.
+- **App uji dan E2E ada di repo** (`integration-tests/`, bukan scratchpad/`/tmp`): `setup.mjs [--fresh] [--admin]`
+  (DB `mt_e2e` di mt-spike-pg), `e2e/run.mjs shared|split|no-credit`, `ui.mjs [--shots <prefix>] [--emails]`. State
+  run (seed, orders, log, email) di `integration-tests/.state/` (git-ignored). Semua proses medusa di-spawn `detached`
+  (process group sendiri) dan dihentikan per group; job lewat `medusa exec` juga di group sendiri. `run-mt-job.ts`
+  menunggu 3 detik setelah job: event workflow dirilis setelah workflow selesai, proses `exec` yang langsung keluar
+  kehilangan event terakhir (worker produksi tidak). Urutan fase di run: 1, 3, 4, 2, limit (fase 2 menghabiskan budget
+  upload per IP).
+- **Pengingat admin** (`adminReminders`, default 1 / 3 hari kerja): "sejak" = entri riwayat terakhir `proof_uploaded`
+  (menunggu verifikasi) / `underpaid` (SQL di `transfer-queue.ts`); kalender (timezone, libur) dibaca dari opsi
+  provider di `configModule.modules` (`getBusinessCalendar`). Job deadlines menandai `payment.data.admin_reminded_at`
+  lewat workflow `flag-manual-transfer-overdue` (lock), lalu satu event `manual_transfer.admin_overdue
+  { payment_ids }` untuk email ringkasan. Badge "Terlambat" dari `overdue`/`overdue_counts` di
+  `GET /admin/manual-transfer/payments`.
+- **Notifikasi** (`src/lib/notifications/`, subscriber `manual-transfer-notifications`): `order.placed`,
+  `order.canceled` (dilewati kalau status `expired`) dan event `manual_transfer.*` → email pembeli + admin lewat
+  Notification Module (`content` HTML/teks dirender plugin, `template: manual-transfer.<nama>`, idempotency key dari
+  waktu entri riwayat / id bukti). Tanpa Notification Module: diam. Template mini-Mustache (`template.ts`), teks EN/ID
+  di `templates.ts`, override `templatesDir`. Identitas toko: `store.name` + metadata `logo_url`, `address`,
+  `support_email`, `phone`, `website` (diedit di halaman settings plugin). Admin: `notifications.adminEmails`, default
+  semua user.
+- **Invoice** pdf-lib, font standar (karakter di luar WinAnsi diganti), `PDFDocument.create({ updateMetadata: false })`
+  supaya producer bukan "pdf-lib"; `invoice.render` mengganti layout. Pratinjau: `GET /admin/manual-transfer/previews/:name`
+  (order contoh, `sample.ts`) dan `npm run email:preview` (tanpa Medusa, butuh build). Provider
+  `providers/email-preview` menulis email ke folder (dipakai app uji).
+- Fase 4 (+ a/b/c) diuji E2E: 177/177 cek (Fase 1–4) di mode shared dan split, 2/2 di `no-credit`; `ui.mjs`: footer
+  ada (default) dan hilang (`showCredit: false`) di kedua halaman plugin.
 - Fase 3 (+ a/b/c) diuji E2E: 136/136 cek (Fase 1–3) di mode shared dan split.
 - Fase 2 diuji E2E: 93/93 cek (Fase 1 + 52 cek Fase 2) di mode shared dan split.
 - Id workflow/step memakai prefix `manual-transfer-` agar tidak bentrok dengan plugin lain (lint mewajibkan

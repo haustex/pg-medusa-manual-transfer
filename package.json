@@ -51,6 +51,10 @@
     "test:unit": "jest",
     "guard": "node scripts/guard.mjs",
     "db:generate": "node scripts/guard.mjs medusa plugin:db:generate",
+    "email:preview": "node scripts/preview-emails.mjs",
+    "test:e2e:setup": "node integration-tests/setup.mjs",
+    "test:e2e": "node integration-tests/e2e/run.mjs shared && node integration-tests/e2e/run.mjs split && node integration-tests/e2e/run.mjs no-credit",
+    "test:ui": "node integration-tests/ui.mjs",
     "prepublishOnly": "medusa plugin:build"
   },
   "devDependencies": {
@@ -99,6 +103,7 @@
   },
   "packageManager": "npm@10.9.9",
   "dependencies": {
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "pdf-lib": "^1.17.1"
   }
 }

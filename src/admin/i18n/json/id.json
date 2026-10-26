@@ -73,7 +73,8 @@
       "deleted": "Rekening dihapus",
       "confirmed": "Pembayaran dikonfirmasi dan di-capture",
       "underpaid": "Kurang bayar dicatat",
-      "rejected": "Bukti transfer ditolak"
+      "rejected": "Bukti transfer ditolak",
+      "storeSaved": "Detail toko disimpan"
     },
     "widget": {
       "title": "Transfer manual",
@@ -103,7 +104,9 @@
       "underpaidDetail": "{{amount}} diterima, sisa {{remaining}}",
       "confirmedDetail": "{{amount}} diterima tanggal {{date}}",
       "reviewedBy": "Dicek oleh {{who}}, {{at}}",
-      "fileDeleted": "File dihapus sesuai masa simpan ({{date}})"
+      "fileDeleted": "File dihapus sesuai masa simpan ({{date}})",
+      "invoice": "Invoice",
+      "invoicePdf": "PDF pro-forma"
     },
     "status": {
       "awaiting_payment": "Menunggu pembayaran",
@@ -149,6 +152,9 @@
       "emptyHint": "Tidak ada pembayaran dengan status ini.",
       "noMatch": "Tidak ada pembayaran yang cocok",
       "loadError": "Gagal memuat pembayaran transfer manual.",
+      "late": "Terlambat",
+      "lateCount": "{{count}} terlambat",
+      "lateHint": "Menunggu tindakan admin sejak {{date}}",
       "tabs": {
         "awaiting_verification": "Perlu verifikasi",
         "awaiting_payment": "Menunggu pembayaran",
@@ -158,6 +164,33 @@
         "expired": "Kedaluwarsa",
         "canceled": "Dibatalkan",
         "all": "Semua"
+      }
+    },
+    "identity": {
+      "title": "Detail toko untuk e-mail dan invoice",
+      "description": "Pembeli melihat nama, logo, dan kontak ini di e-mail pembayaran dan invoice pro-forma.",
+      "preview": "Pratinjau",
+      "noContact": "Belum ada detail kontak.",
+      "name": "Nama toko",
+      "logo": "URL logo",
+      "logoHint": "PNG atau JPG, tampil di e-mail dan invoice.",
+      "address": "Alamat",
+      "email": "E-mail kontak",
+      "emailHint": "Ditampilkan ke pembeli; balasan masuk ke alamat pengirim di penyedia e-mail Anda.",
+      "phone": "Telepon",
+      "website": "Situs web",
+      "templates": {
+        "order_placed": "Pesanan dibuat (instruksi)",
+        "proof_received": "Bukti diterima",
+        "proof_rejected": "Bukti ditolak",
+        "payment_underpaid": "Kurang bayar",
+        "payment_confirmed": "Pembayaran dikonfirmasi",
+        "payment_reminder": "Pengingat pembayaran",
+        "payment_expired": "Kedaluwarsa, pesanan dibatalkan",
+        "payment_canceled": "Pesanan dibatalkan",
+        "admin_status_changed": "Admin: status berubah",
+        "admin_overdue": "Admin: pembayaran menunggu",
+        "invoice": "Invoice pro-forma (PDF)"
       }
     },
     "credit": {

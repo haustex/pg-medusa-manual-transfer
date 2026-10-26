@@ -129,12 +129,19 @@ export type TransferListRow = {
   expires_at: string | null
   created_at: string
   last_proof_at: string | null
+  /** Start of the current wait for an admin (awaiting verification, underpaid) */
+  status_since: string | null
+  /** Waits longer than the adminReminders threshold */
+  overdue: boolean
+  overdue_at: string | null
 }
 
 export type TransferList = {
   payments: TransferListRow[]
   count: number
   counts: Record<string, number>
+  /** Late payments per status */
+  overdue_counts: Record<string, number>
 }
 
 export const TRANSFERS_QUERY_KEY = ["manual-transfer-payments"]
@@ -234,4 +241,12 @@ export const STATUS_COLOR: Record<string, "green" | "orange" | "red" | "grey" | 
   rejected: "red",
   expired: "grey",
   canceled: "grey",
+}
+
+/** The order's pro-forma invoice PDF, in the Admin's language if it has one */
+export function invoiceUrl(orderId: string, language?: string): string {
+  const backend = import.meta.env.VITE_BACKEND_URL || "/"
+  const base = backend === "/" ? "" : backend.replace(/\/+$/, "")
+  const locale = language?.startsWith("id") ? "id" : "en"
+  return `${base}/admin/manual-transfer/orders/${orderId}/invoice?locale=${locale}`
 }

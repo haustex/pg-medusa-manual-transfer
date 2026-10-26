@@ -1,5 +1,5 @@
 import type { Knex } from "@medusajs/framework/mikro-orm/knex"
-import { ManualTransferStatus } from "./payment-data"
+import { ADMIN_FOLLOW_UP, ManualTransferStatus } from "./payment-data"
 
 /**
  * Manual-transfer payments with their order, read straight from the database.
@@ -21,6 +21,9 @@ export type TransferRow = {
   expires_at: string | null
   created_at: string
   last_proof_at: string | null
+  /** Start of the current wait for an admin (awaiting verification, underpaid), else null */
+  status_since: string | null
+  admin_reminded_at: string | null
 }
 
 const PROVIDER_PATTERN = "pp_manual-transfer_%"
@@ -58,7 +61,38 @@ function toRow(raw: Record<string, unknown>): TransferRow {
     expires_at: iso(raw.expires_at),
     created_at: iso(raw.created_at)!,
     last_proof_at: iso(raw.last_proof_at),
+    status_since: iso(raw.status_since),
+    admin_reminded_at: iso(raw.admin_reminded_at),
   }
+}
+
+/** Latest history entry of the event that started the status's wait for an admin */
+const STATUS_SINCE_SQL = `(
+  select max((h->>'at')::timestamptz)
+  from jsonb_array_elements(case when jsonb_typeof(p.data->'history') = 'array' then p.data->'history' else '[]'::jsonb end) h
+  where h->>'event' = case p.data->>'status' ${Object.entries(ADMIN_FOLLOW_UP)
+    .map(([status, event]) => `when '${status}' then '${event}'`)
+    .join(" ")} end
+) as status_since`
+
+function columns(pg: Knex) {
+  return [
+    "p.id as payment_id",
+    "o.id as order_id",
+    "o.display_id",
+    "o.email",
+    "p.amount",
+    "p.currency_code",
+    "p.created_at",
+    pg.raw("p.data->>'status' as status"),
+    pg.raw("p.data->>'reference' as reference"),
+    pg.raw("p.data->>'expires_at' as expires_at"),
+    pg.raw("p.data->>'admin_reminded_at' as admin_reminded_at"),
+    pg.raw(
+      "(select max(mp.created_at) from manual_transfer_proof mp where mp.payment_id = p.id and mp.deleted_at is null) as last_proof_at"
+    ),
+    pg.raw(STATUS_SINCE_SQL),
+  ]
 }
 
 export type ListTransfersFilter = {
@@ -88,21 +122,7 @@ export async function listTransfers(
   }
   const [{ count }] = await filtered.clone().count<{ count: string }[]>({ count: "p.id" })
   const rows = await filtered
-    .select(
-      "p.id as payment_id",
-      "o.id as order_id",
-      "o.display_id",
-      "o.email",
-      "p.amount",
-      "p.currency_code",
-      "p.created_at",
-      pg.raw("p.data->>'status' as status"),
-      pg.raw("p.data->>'reference' as reference"),
-      pg.raw("p.data->>'expires_at' as expires_at"),
-      pg.raw(
-        "(select max(mp.created_at) from manual_transfer_proof mp where mp.payment_id = p.id and mp.deleted_at is null) as last_proof_at"
-      )
-    )
+    .select(...columns(pg))
     .orderBy("p.created_at", "desc")
     .limit(limit)
     .offset(offset)
@@ -116,6 +136,34 @@ export async function countTransfersByStatus(pg: Knex): Promise<Record<string, n
     .count({ count: "p.id" })
     .groupByRaw("p.data->>'status'")) as unknown as { status: string | null; count: string }[]
   return Object.fromEntries(rows.map((r) => [String(r.status), Number(r.count)]))
+}
+
+/**
+ * Open payments waiting for an admin (awaiting verification, underpaid), oldest
+ * first; the caller decides with src/lib/overdue.ts which ones are late.
+ */
+export async function listFollowUps(pg: Knex, limit = 500): Promise<TransferRow[]> {
+  const rows = await open(base(pg))
+    .whereRaw("p.data->>'status' = any(?)", [Object.keys(ADMIN_FOLLOW_UP)])
+    .select(...columns(pg))
+    .orderBy("p.created_at", "asc")
+    .limit(limit)
+  return rows.map(toRow)
+}
+
+/** The order a manual-transfer payment belongs to */
+export async function findPaymentOrderId(pg: Knex, paymentId: string): Promise<string | null> {
+  const row = await base(pg).where("p.id", paymentId).first("o.id as order_id")
+  return (row?.order_id as string | undefined) ?? null
+}
+
+/** Payments by id, with their order (for the admin digest) */
+export async function listTransfersById(pg: Knex, paymentIds: string[]): Promise<TransferRow[]> {
+  if (!paymentIds.length) {
+    return []
+  }
+  const rows = await base(pg).whereIn("p.id", paymentIds).select(...columns(pg)).orderBy("p.created_at", "asc")
+  return rows.map(toRow)
 }
 
 export type DueTransfer = { payment_id: string; order_id: string }

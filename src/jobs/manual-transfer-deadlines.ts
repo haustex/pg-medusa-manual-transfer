@@ -1,9 +1,11 @@
-import type { Logger, MedusaContainer } from "@medusajs/framework/types"
-import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
-import { EXPIRABLE_STATUSES, REMINDABLE_STATUSES } from "../lib/payment-data"
-import { getDeadlineOptions } from "../lib/plugin-options"
-import { findTransfersDue } from "../lib/transfer-queue"
+import type { IEventBusModuleService, Logger, MedusaContainer } from "@medusajs/framework/types"
+import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils"
+import { needsAdminReminder } from "../lib/overdue"
+import { EXPIRABLE_STATUSES, MANUAL_TRANSFER_EVENTS, REMINDABLE_STATUSES } from "../lib/payment-data"
+import { getAdminReminderOptions, getBusinessCalendar, getDeadlineOptions } from "../lib/plugin-options"
+import { findTransfersDue, listFollowUps } from "../lib/transfer-queue"
 import { expireManualTransferPaymentWorkflow } from "../workflows/expire-manual-transfer-payment"
+import { flagManualTransferOverdueWorkflow } from "../workflows/flag-manual-transfer-overdue"
 import { remindManualTransferPaymentWorkflow } from "../workflows/remind-manual-transfer-payment"
 
 /** A payment that changed between the query and its lock is skipped quietly */
@@ -12,11 +14,45 @@ function isSkip(error: unknown): boolean {
 }
 
 /**
+ * Payments waiting too long for an admin (see adminReminders) are flagged once
+ * per wait, and one manual_transfer.admin_overdue event lists them for the
+ * digest e-mail.
+ */
+async function remindAdmins(container: MedusaContainer, logger: Logger, now: Date) {
+  const thresholds = getAdminReminderOptions(container)
+  if (!thresholds.email) {
+    return
+  }
+  const calendar = getBusinessCalendar(container)
+  const pg = container.resolve(ContainerRegistrationKeys.PG_CONNECTION)
+  const late = (await listFollowUps(pg)).filter((row) => needsAdminReminder(row, thresholds, calendar, now))
+  const flagged: string[] = []
+  for (const row of late) {
+    try {
+      await flagManualTransferOverdueWorkflow(container).run({
+        input: { order_id: row.order_id, payment_id: row.payment_id, status: row.status!, status_since: row.status_since! },
+      })
+      flagged.push(row.payment_id)
+    } catch (error) {
+      if (!isSkip(error)) {
+        logger.warn(`manual transfer: could not flag late payment ${row.payment_id}: ${(error as Error).message}`)
+      }
+    }
+  }
+  if (flagged.length) {
+    await container
+      .resolve<IEventBusModuleService>(Modules.EVENT_BUS)
+      .emit({ name: MANUAL_TRANSFER_EVENTS.ADMIN_OVERDUE, data: { payment_ids: flagged } })
+  }
+}
+
+/**
  * Every 15 minutes: sends the reminder event for payments due within
- * `reminderHours` (once each), then cancels orders whose deadline passed
- * while still awaiting payment (or after a rejected proof), releasing their
- * stock. Payments with a proof waiting for review or partly paid are left for
- * an admin.
+ * `reminderHours` (once each), tells the admins about payments waiting too
+ * long for them, then cancels orders whose deadline passed while still
+ * awaiting payment (or after a rejected proof), releasing their stock.
+ * Payments with a proof waiting for review or partly paid are left for an
+ * admin.
  */
 export default async function manualTransferDeadlinesJob(container: MedusaContainer) {
   const logger = container.resolve<Logger>(ContainerRegistrationKeys.LOGGER)
@@ -39,6 +75,8 @@ export default async function manualTransferDeadlinesJob(container: MedusaContai
       }
     }
   }
+
+  await remindAdmins(container, logger, now)
 
   if (!autoCancelExpired) {
     return

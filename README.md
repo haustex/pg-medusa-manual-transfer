@@ -4,7 +4,7 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
 
 > Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
-**Status:** in development (phase 3 of 6: payment provider, bank accounts, payment-proof upload, admin verification). Coming soon to hauskayu.com.
+**Status:** in development (phase 4 of 6: payment provider, bank accounts, payment-proof upload, admin verification, e-mails and pro-forma invoice). Coming soon to hauskayu.com.
 
 [English](#english) · [Bahasa Indonesia](#bahasa-indonesia)
 
@@ -42,14 +42,24 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
   history with the admin's name, time and note. Each form carries the warning *check the bank statement, never rely
   on the proof alone*.
 - **Statuses**: awaiting payment, awaiting verification, paid, underpaid, rejected, expired (and canceled).
-- **Reminder** 24 hours before the deadline (event `manual_transfer.payment_reminder`, once per payment; the e-mail
-  itself comes in phase 4) and **auto-cancel** when the deadline passes: the order is canceled with Medusa's own
+- **Reminder** 24 hours before the deadline (once per payment) and **auto-cancel** when the deadline passes: the order is canceled with Medusa's own
   workflow, so the stock reservation is released. Payments with a proof waiting for review or with part of the money
   received are left for an admin. Both run every 15 minutes in the worker.
 - **Proof retention** (optional): delete proof files some days after the order was paid or canceled, keeping the
   records.
+- **Late badge and admin digest**: a proof waiting for verification more than 1 business day, or an underpayment
+  without follow-up for more than 3 business days, shows a red "Late" badge in the queue (per row and per tab) and is
+  listed once in a digest e-mail to the admins. Both thresholds are options.
+- **E-mails for every status change**, to the buyer and to the admins, through Medusa's Notification Module (any
+  e-mail provider): order placed with the payment instructions and the pro-forma invoice attached, proof received,
+  proof rejected (with the reason), underpaid (what is left), paid, reminder, expired, canceled. Default templates in
+  English and Indonesian; replace any of them with your own HTML files.
+- **Pro-forma invoice PDF**: store name, logo and address, order number, reference, items and totals, bank details
+  and deadline. Attached to the order e-mail, downloadable by the buyer and from the order page; the layout can be
+  replaced.
+- The e-mails and the invoice carry **your store's identity only** (Settings → Manual transfer → Store details).
 
-E-mails, invoices and storefront pages follow in later phases.
+Storefront pages follow in a later phase.
 
 ### Install
 
@@ -71,6 +81,27 @@ module.exports = defineConfig({
         proofRetentionDays: null,  // e.g. 365: delete proof files that long after the order was paid or canceled
         reminderHours: 24,         // reminder event this many hours before the deadline
         autoCancelExpired: true,   // cancel orders whose deadline passed without payment
+        adminReminders: {
+          verificationBusinessDays: 1, // "Late" when a proof waits longer than this
+          underpaidBusinessDays: 3,    // "Late" when an underpayment has no follow-up for longer than this
+          email: true,                 // digest e-mail to the admins (the badge is always shown)
+        },
+        notifications: {
+          // adminEmails: ["orders@your-store.com"],  // default: every Admin user
+          locale: "en",              // buyer e-mails: "en" or "id"; an order's metadata.locale wins
+          // adminLocale: "id",
+          paymentUrl: "https://your-store.com/transfer/{order_id}?token={token}", // storefront page; no link without it
+          adminUrl: "https://your-store.com/app", // links in the admin e-mails
+          // templatesDir: "./emails",            // your own templates, see below
+          // templateIds: { order_placed: "d-123" }, // provider-side templates (e.g. SendGrid)
+          // buyer: { payment_reminder: false },  // switch single e-mails off
+          // admin: { paid: false, overdue: true },
+          attachInvoice: true,
+        },
+        invoice: {
+          // note: "Bank fees are paid by the buyer.",
+          // render: "./src/invoice.js",          // your own PDF layout, see below
+        },
         proofUploads: {
           perIp: 10,               // upload attempts per IP per window
           perIpWindowMinutes: 15,
@@ -105,7 +136,63 @@ module.exports = defineConfig({
 ```
 
 Then run `npx medusa db:migrate`, enable the `pp_manual-transfer_manual-transfer` provider on your regions, and add
-your bank account in **Settings → Manual transfer**.
+your bank account in **Settings → Manual transfer**. For e-mails, configure Medusa's Notification Module with a
+provider on the `email` channel (see below).
+
+### E-mails and the pro-forma invoice
+
+The plugin sends through Medusa's **Notification Module**, so any provider on the `email` channel works (SendGrid,
+Resend, SES, SMTP plugins, …). Without a Notification Module nothing is sent and nothing fails.
+
+| Change | Buyer e-mail (template) | Admin e-mail |
+| --- | --- | --- |
+| Order placed | `order_placed`: instructions, exact amount, reference, deadline, invoice PDF attached | `admin_status_changed` |
+| Proof uploaded | `proof_received` | `admin_status_changed`, with the bank-statement warning |
+| Proof rejected | `proof_rejected`, with the reason and the instructions | `admin_status_changed` |
+| Underpaid | `payment_underpaid`, with what is left | `admin_status_changed` |
+| Paid | `payment_confirmed` | `admin_status_changed` |
+| Deadline near | `payment_reminder` | – |
+| Expired | `payment_expired` | `admin_status_changed` |
+| Canceled | `payment_canceled` | `admin_status_changed` |
+| Waiting too long for an admin | – | `admin_overdue` (one digest) |
+
+Every notification has `content: { subject, html, text }` rendered by the plugin, `template:
+"manual-transfer.<name>"` (or your `templateIds`), all values in `data`, and an idempotency key, so a retried event
+never sends the same e-mail twice. Attachments are base64.
+
+**Store identity.** The e-mails and the invoice show the store's name (Settings → Store) and the store metadata
+`logo_url`, `address`, `support_email`, `phone` and `website`. Edit them in **Settings → Manual transfer → Store
+details**; the **Preview** menu there opens every e-mail and the invoice rendered with a made-up order.
+
+**Your own templates.** Put HTML files in `notifications.templatesDir`: `<name>.<locale>.html` or `<name>.html`
+(names in the table above, plus `layout.html` with `{{{content}}}` for the frame). The subject is the file's
+`<title>`. A file containing `<html` is sent as it is, without the layout. Syntax: `{{value}}` (escaped),
+`{{{value}}}` (raw), `{{#value}}…{{/value}}` (if / for each), `{{^value}}…{{/value}}` (if not). Values: `store.*`,
+`order.number`, `order.customer_name`, `payment.reference`, `payment.amount`, `payment.amount_received`,
+`payment.amount_remaining`, `payment.deadline`, `payment.account.*`, `payment.status_label`, `amount_to_pay`,
+`payment_url`, `rejection_reason`, `confirmation.*`, `admin_order_url`, and `t.*` (the default wording).
+
+**Your own invoice.** `invoice.render` is a function, or a module path whose default export is one:
+`(context, pdfLib) => Uint8Array` with the labels, store, items, totals, account and the loaded order in `context`
+and [pdf-lib](https://pdf-lib.js.org) in `pdfLib`.
+
+**Testing without a real provider.** The package includes a notification provider that writes every e-mail to a
+folder (`.html`, `.txt`, `.json` and the attachments) instead of sending it. For development only:
+
+```ts
+{
+  resolve: "@medusajs/medusa/notification",
+  options: {
+    providers: [
+      {
+        resolve: "medusa-payment-manual-transfer/providers/email-preview",
+        id: "email-preview",
+        options: { channels: ["email"], dir: "./email-previews" },
+      },
+    ],
+  },
+},
+```
 
 ### Signing secret (production)
 
@@ -158,7 +245,9 @@ deleted" instead of the View button, and old signed links answer `410 Gone`.
 | GET / POST | `/admin/manual-transfer/accounts` | list / create accounts |
 | GET / POST / DELETE | `/admin/manual-transfer/accounts/:id` | read / update / delete an account |
 | GET | `/admin/manual-transfer/orders/:id` | the order's manual-transfer payment, history and proofs |
-| GET | `/admin/manual-transfer/payments` | the verification queue: `?status=&q=&limit=&offset=`, with `counts` per status |
+| GET | `/admin/manual-transfer/orders/:id/invoice` | the pro-forma invoice PDF (`?locale=en\|id`) |
+| GET | `/admin/manual-transfer/payments` | the verification queue: `?status=&q=&limit=&offset=`, with `counts` and `overdue_counts` per status, `overdue` per row |
+| GET | `/admin/manual-transfer/previews/:name` | an e-mail (template name) or `invoice`, rendered with a made-up order |
 | POST | `/admin/manual-transfer/payments/:id/confirm` | confirm a transfer and capture the payment |
 | POST | `/admin/manual-transfer/payments/:id/underpaid` | record a partial transfer (status `underpaid`) |
 | GET | `/admin/manual-transfer/config` | `{ show_credit, proof_retention_days }` for the Admin pages |
@@ -180,11 +269,12 @@ bearer) or anyone holding the order's upload token (`x-manual-transfer-token` he
 | Method | Path | |
 | --- | --- | --- |
 | GET | `/store/manual-transfer/orders/:id` | instructions (reference, amount, account, deadline), status, `amount_received` / `amount_remaining`, `can_upload`, proofs |
+| GET | `/store/manual-transfer/orders/:id/invoice` | the pro-forma invoice PDF (`?locale=en\|id`) |
 | POST | `/store/manual-transfer/orders/:id/proofs` | multipart: `file` (JPG/PNG/PDF ≤ 5 MB), optional `note` |
 | GET | `/store/manual-transfer/carts/:id/upload-token` | right after checkout (24 h): trade the completed cart id for `{ order_id, token }` |
 
 Anyone else gets `404`. Too many requests get `429` with `Retry-After`. Upload tokens are HMAC-derived from the order
-id, so the order e-mail (phase 4) can always rebuild the link; they only work while the payment accepts proofs.
+id, so the e-mails can always rebuild the link (`{token}` in `paymentUrl`); they only work while the payment accepts proofs.
 
 The per-IP limit is kept in memory per server process; the per-order limit is counted in the database. Behind a
 reverse proxy, make sure Express sees the client IP (`trust proxy`). Run several server instances? Use a shared
@@ -195,14 +285,20 @@ payment.
 
 `payment.data` (and the payment session's data) holds `reference`, `account` (the copied account details),
 `amount`, `currency_code`, `status` (`awaiting_payment`, `awaiting_verification`, `paid`, `underpaid`, `rejected`,
-`expired`, `canceled`), `authorized_at`, `expires_at`, `history`, `receipts` (partial transfers), `reminded_at` and,
-once confirmed, `confirmation`. The provider rebuilds it from these keys at every step, so data a storefront sends
+`expired`, `canceled`), `authorized_at`, `expires_at`, `history`, `receipts` (partial transfers), `reminded_at`,
+`admin_reminded_at` and, once confirmed, `confirmation`. The provider rebuilds it from these keys at every step, so data a storefront sends
 when creating the session is ignored.
 
 Events for notifications: `manual_transfer.proof_uploaded` and `manual_transfer.proof_rejected` (`{ id, order_id }`),
 `manual_transfer.payment_confirmed` and `manual_transfer.payment_underpaid` (`{ id }` of the payment),
-`manual_transfer.payment_reminder` (`{ id, order_id, expires_at }`) and `manual_transfer.payment_expired`
-(`{ id, order_id }`).
+`manual_transfer.payment_reminder` (`{ id, order_id, expires_at }`), `manual_transfer.payment_expired`
+(`{ id, order_id }`) and `manual_transfer.admin_overdue` (`{ payment_ids }`). The plugin's own subscriber turns them
+(and `order.placed` / `order.canceled`) into the e-mails above.
+
+### Development
+
+`integration-tests/` holds the E2E suite and the test app: see [integration-tests/README.md](integration-tests/README.md).
+`npm run email:preview -- <dir>` renders every e-mail and the invoice with a made-up order, without Medusa.
 
 ### Roadmap
 
@@ -245,12 +341,28 @@ Events for notifications: `manual_transfer.proof_uploaded` and `manual_transfer.
   *cek mutasi di aplikasi bank, jangan hanya percaya bukti*.
 - **Tombol "Capture" bawaan Medusa tidak dipakai** untuk transfer bank dan akan ditolak; capture terjadi lewat
   Konfirmasi lunas.
-- **Pengingat** 24 jam sebelum batas waktu (event `manual_transfer.payment_reminder`; emailnya di fase 4) dan
+- **Pengingat** 24 jam sebelum batas waktu dan
   **auto-cancel** saat kedaluwarsa: order dibatalkan dengan workflow Medusa sehingga stok kembali. Pembayaran yang
   buktinya menunggu dicek atau yang sudah dibayar sebagian dibiarkan untuk admin. Keduanya jalan tiap 15 menit di
   worker.
 - **Masa simpan bukti** (opsional, `proofRetentionDays`): isi file bukti dihapus N hari setelah order lunas atau
   dibatalkan; data buktinya (nama, ukuran, hash, riwayat) tetap disimpan. Default `null` = simpan selamanya.
+
+- **Badge "Terlambat" dan email ringkasan ke admin**: bukti yang menunggu verifikasi lebih dari 1 hari kerja, atau
+  kurang bayar tanpa tindak lanjut lebih dari 3 hari kerja, diberi badge merah di antrean (per baris dan per tab)
+  dan dikirim sekali dalam email ringkasan ke admin. Ambangnya bisa diatur (`adminReminders`).
+- **Email untuk setiap perubahan status**, ke pembeli dan admin, lewat Notification Module Medusa (provider email
+  apa pun): order dibuat (instruksi + invoice PDF terlampir), bukti diterima, bukti ditolak (dengan alasan), kurang
+  bayar (sisa tagihan), lunas, pengingat, kedaluwarsa, dibatalkan. Template default bahasa Inggris dan Indonesia
+  (`notifications.locale: "id"`, atau `metadata.locale` order), bisa diganti dengan file HTML sendiri
+  (`notifications.templatesDir`).
+- **Invoice PDF pro-forma**: nama, logo, alamat toko, nomor order, referensi, barang dan total, detail rekening, batas
+  waktu. Terlampir di email order, bisa diunduh pembeli dan dari halaman order; layout-nya bisa diganti
+  (`invoice.render`).
+- Email dan invoice **hanya memakai identitas toko Anda** (Settings → Manual transfer → Detail toko). Menu
+  **Pratinjau** di sana membuka setiap email dan invoice dengan order contoh.
+- **Tes email tanpa provider asli**: provider `medusa-payment-manual-transfer/providers/email-preview` menulis setiap
+  email ke folder (HTML, teks, JSON, lampiran) alih-alih mengirimnya. Hanya untuk development.
 
 **Secret produksi**: buat dengan `openssl rand -hex 32` lalu isi `MANUAL_TRANSFER_SECRET` di `.env`. Tanpa itu plugin
 memakai `http.jwtSecret` (cukup untuk development). Mengganti secret membatalkan semua token upload dan link bukti
@@ -262,7 +374,7 @@ English). Hanya kalau Locking Module dimatikan, plugin memakai lock di prosesnya
 
 **Roadmap**: adapter penyimpanan bukti ke bucket privat (S3, Cloudflare R2, …) dengan signed URL, belum dikerjakan.
 
-Email, invoice, dan halaman storefront menyusul di fase berikutnya. Konfigurasi lengkap ada di bagian English di atas.
+Halaman storefront menyusul di fase berikutnya. Konfigurasi lengkap ada di bagian English di atas.
 
 **Selalu cek mutasi di aplikasi bank sebelum konfirmasi, jangan hanya percaya bukti transfer.**
 

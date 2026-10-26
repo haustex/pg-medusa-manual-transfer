@@ -64,7 +64,9 @@ const ManualTransferQueuePage = () => {
     placeholderData: keepPreviousData,
   })
   const counts = data?.counts ?? {}
+  const overdueCounts = data?.overdue_counts ?? {}
   const total = Object.values(counts).reduce((sum, n) => sum + n, 0)
+  const totalOverdue = Object.values(overdueCounts).reduce((sum, n) => sum + n, 0)
 
   const columns = useMemo(
     () => [
@@ -95,12 +97,25 @@ const ManualTransferQueuePage = () => {
       }),
       columnHelper.accessor("status", {
         header: t("manualTransfer.queue.status"),
-        cell: ({ getValue }) => {
-          const status = getValue() ?? "awaiting_payment"
+        cell: ({ row }) => {
+          const status = row.original.status ?? "awaiting_payment"
           return (
-            <StatusBadge color={STATUS_COLOR[status] ?? "grey"}>
-              {t(`manualTransfer.status.${status}`, { defaultValue: status })}
-            </StatusBadge>
+            <div className="flex items-center gap-x-1.5">
+              <StatusBadge color={STATUS_COLOR[status] ?? "grey"}>
+                {t(`manualTransfer.status.${status}`, { defaultValue: status })}
+              </StatusBadge>
+              {row.original.overdue && (
+                <Badge
+                  size="2xsmall"
+                  color="red"
+                  title={t("manualTransfer.queue.lateHint", {
+                    date: formatDateTime(row.original.status_since, i18n.language),
+                  })}
+                >
+                  {t("manualTransfer.queue.late")}
+                </Badge>
+              )}
+            </div>
           )
         },
       }),
@@ -174,12 +189,18 @@ const ManualTransferQueuePage = () => {
             <Tabs.List>
               {TABS.map((value) => {
                 const count = value === "all" ? total : counts[value] ?? 0
+                const late = value === "all" ? totalOverdue : overdueCounts[value] ?? 0
                 return (
                   <Tabs.Trigger key={value} value={value} className="gap-x-1.5 whitespace-nowrap">
                     {t(`manualTransfer.queue.tabs.${value}`)}
                     {count > 0 && (
                       <Badge size="2xsmall" color={value === "awaiting_verification" ? "blue" : "grey"}>
                         {count}
+                      </Badge>
+                    )}
+                    {late > 0 && (
+                      <Badge size="2xsmall" color="red">
+                        {t("manualTransfer.queue.lateCount", { count: late })}
                       </Badge>
                     )}
                   </Tabs.Trigger>

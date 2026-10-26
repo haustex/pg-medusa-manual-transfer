@@ -1,0 +1,8 @@
+{
+  "name": "mt-e2e-browser",
+  "private": true,
+  "description": "Admin screenshots and UI checks, run inside the mcr.microsoft.com/playwright:v1.48.2-jammy container",
+  "dependencies": {
+    "playwright-core": "1.48.2"
+  }
+}
