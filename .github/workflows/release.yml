@@ -3,7 +3,8 @@ name: Release
 # Publishes to npm when a version tag (v0.1.0, …) is pushed, after the full CI
 # suite passed. npm trusted publishing (OIDC): no NPM_TOKEN secret, provenance
 # attached. setup-node gets no `registry-url`: it would write an .npmrc that
-# expects NODE_AUTH_TOKEN and get in the way of the OIDC exchange.
+# expects NODE_AUTH_TOKEN and get in the way of the OIDC exchange. A tag for a
+# version already on npm passes without publishing.
 
 on:
   push:
@@ -48,5 +49,18 @@ jobs:
       - run: npm run build
       - run: node scripts/check-pack.mjs
 
+      # The first version may be published by hand (a trusted publisher can only be
+      # added to a package that exists); a tag for an existing version only re-verifies.
+      - name: Skip if this version is already on npm
+        id: exists
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "::notice::${NAME}@${VERSION} is already published; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
+        if: steps.exists.outputs.skip != 'true'
         run: npm publish --provenance --access public

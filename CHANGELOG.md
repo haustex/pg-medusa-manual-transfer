@@ -3,7 +3,9 @@
 All notable changes to `medusa-payment-manual-transfer`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - Unreleased
+## [Unreleased]
+
+## [0.1.0] - 2026-10-27
 
 First public release. Works with Medusa `^2.19.0`, tested on 2.19.0 and 2.22.1.
 
