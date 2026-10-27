@@ -27,6 +27,8 @@ export const PG_CONTAINER = process.env.MT_PG_CONTAINER ?? "mt-spike-pg"
 export const SERVER_PORT = 9400
 export const WORKER_PORT = 9401
 export const EXEC_PORT = 9402
+/** The example Next.js storefront (examples/nextjs-starter), see storefront.mjs */
+export const STOREFRONT_PORT = 9410
 export const BASE = `http://127.0.0.1:${SERVER_PORT}`
 
 export const ADMIN_EMAIL = "admin@e2e.test"

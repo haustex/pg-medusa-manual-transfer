@@ -99,6 +99,12 @@ export type ManualTransferInvoiceOptions = {
   render?: string | ((context: unknown, pdfLib: unknown) => Promise<Uint8Array> | Uint8Array)
   /** Extra line under the payment instructions */
   note?: string
+  /**
+   * The store's own TTF/OTF font for the default layout (relative to the app's
+   * working directory): one file for every style, or { regular, bold?, mono? }.
+   * Default: the bundled Noto Sans, which covers the Latin scripts.
+   */
+  fontPath?: string | { regular: string; bold?: string; mono?: string }
 }
 
 export const PACKAGE_NAME = "medusa-payment-manual-transfer"

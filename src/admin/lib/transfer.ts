@@ -152,7 +152,16 @@ export function listTransfers(params: { status?: string; q?: string; limit: numb
   })
 }
 
-export type PluginConfig = { show_credit: boolean; proof_retention_days: number | null }
+export type PluginConfig = {
+  show_credit: boolean
+  proof_retention_days: number | null
+  notifications: {
+    active: boolean
+    enabled: boolean
+    admin_recipients: { source: "option" | "admin_users"; emails: string[] }
+    payment_url: string | null
+  }
+}
 
 export const CONFIG_QUERY_KEY = ["manual-transfer-config"]
 

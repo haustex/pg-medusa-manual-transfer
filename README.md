@@ -4,7 +4,7 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
 
 > Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
-**Status:** in development (phase 4 of 6: payment provider, bank accounts, payment-proof upload, admin verification, e-mails and pro-forma invoice). Coming soon to hauskayu.com.
+**Status:** in development (phase 5 of 6: payment provider, bank accounts, payment-proof upload, admin verification, e-mails, pro-forma invoice and storefront example). Coming soon to hauskayu.com.
 
 [English](#english) · [Bahasa Indonesia](#bahasa-indonesia)
 
@@ -56,10 +56,12 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
   English and Indonesian; replace any of them with your own HTML files.
 - **Pro-forma invoice PDF**: store name, logo and address, order number, reference, items and totals, bank details
   and deadline. Attached to the order e-mail, downloadable by the buyer and from the order page; the layout can be
-  replaced.
+  replaced. Set in an embedded Noto Sans (open license, Latin subset), so names like "José Müller-Ñúñez" keep their
+  accents; `invoice.fontPath` uses your store's font instead.
 - The e-mails and the invoice carry **your store's identity only** (Settings → Manual transfer → Store details).
-
-Storefront pages follow in a later phase.
+- **Storefront example** for the Medusa Next.js Starter (`examples/nextjs-starter`, in the npm package): payment
+  instructions with copy buttons, exact amount, reference, countdown, the "fees: OUR" note and the invoice download,
+  plus the proof upload with its status. English and Indonesian. See [Storefront](#storefront).
 
 ### Install
 
@@ -87,10 +89,10 @@ module.exports = defineConfig({
           email: true,                 // digest e-mail to the admins (the badge is always shown)
         },
         notifications: {
-          // adminEmails: ["orders@your-store.com"],  // default: every Admin user
+          adminEmails: ["orders@your-store.com"],  // recommended; unset = every Admin user (logged, shown in Settings)
           locale: "en",              // buyer e-mails: "en" or "id"; an order's metadata.locale wins
           // adminLocale: "id",
-          paymentUrl: "https://your-store.com/transfer/{order_id}?token={token}", // storefront page; no link without it
+          paymentUrl: "https://your-store.com/transfer/{order_id}?token={token}", // the example storefront's page; no link without it
           adminUrl: "https://your-store.com/app", // links in the admin e-mails
           // templatesDir: "./emails",            // your own templates, see below
           // templateIds: { order_placed: "d-123" }, // provider-side templates (e.g. SendGrid)
@@ -100,6 +102,7 @@ module.exports = defineConfig({
         },
         invoice: {
           // note: "Bank fees are paid by the buyer.",
+          // fontPath: "./fonts/Brand.ttf",       // your TTF/OTF, or { regular, bold, mono }; default: bundled Noto Sans
           // render: "./src/invoice.js",          // your own PDF layout, see below
         },
         proofUploads: {
@@ -172,9 +175,21 @@ details**; the **Preview** menu there opens every e-mail and the invoice rendere
 `payment.amount_remaining`, `payment.deadline`, `payment.account.*`, `payment.status_label`, `amount_to_pay`,
 `payment_url`, `rejection_reason`, `confirmation.*`, `admin_order_url`, and `t.*` (the default wording).
 
+**Admin recipients.** Set `notifications.adminEmails` to the addresses that should get the admin e-mails (new order,
+proof uploaded, paid, digest, …). Without it they go to every Admin user: the plugin logs a warning once, and
+**Settings → Manual transfer → E-mail notifications** lists who receives them right now, plus the `paymentUrl` the
+buyer e-mails link to.
+
+**Invoice font.** The default layout embeds Noto Sans (SIL Open Font License, subset to the Latin scripts, see
+`assets/fonts`), so accented names and addresses come out intact; only the glyphs used end up in the PDF. For your
+brand font, or for other scripts, set `invoice.fontPath` to a TTF/OTF file (relative to the app's working directory)
+or `{ regular, bold?, mono? }`; bold falls back to regular, mono to the bundled one. An unreadable file logs a warning
+and the bundled fonts are used. Characters a font has no glyph for lose their accent or become "?".
+
 **Your own invoice.** `invoice.render` is a function, or a module path whose default export is one:
 `(context, pdfLib) => Uint8Array` with the labels, store, items, totals, account and the loaded order in `context`
-and [pdf-lib](https://pdf-lib.js.org) in `pdfLib`.
+and [pdf-lib](https://pdf-lib.js.org) in `pdfLib`. `await context.embedFonts(pdf)` embeds the same fonts as the
+default layout.
 
 **Testing without a real provider.** The package includes a notification provider that writes every e-mail to a
 folder (`.html`, `.txt`, `.json` and the attachments) instead of sending it. For development only:
@@ -193,6 +208,22 @@ folder (`.html`, `.txt`, `.json` and the attachments) instead of sending it. For
   },
 },
 ```
+
+### Storefront
+
+`examples/nextjs-starter` (part of the npm package) adds the buyer's pages to the
+[Medusa Next.js Starter](https://github.com/medusajs/nextjs-starter-medusa):
+
+```bash
+node node_modules/medusa-payment-manual-transfer/examples/nextjs-starter/install.mjs ../your-storefront
+```
+
+It copies the pages and makes four small, checked edits to the starter (payment method name, place-order button,
+order-page link, no "paid at" for unpaid transfers). Placing an order leads to `/{countryCode}/transfer/{orderId}`:
+status, exact amount, bank details and reference with copy buttons, deadline with countdown, the "choose OUR" note, the
+invoice download and the proof upload. Guests get there with the upload token, logged-in customers with their session.
+Set `notifications.paymentUrl` to `https://<storefront>/transfer/{order_id}?token={token}` so the e-mails link to the
+same page. Details, the list of edits and porting notes: [examples/nextjs-starter/README.md](examples/nextjs-starter/README.md).
 
 ### Signing secret (production)
 
@@ -250,7 +281,7 @@ deleted" instead of the View button, and old signed links answer `410 Gone`.
 | GET | `/admin/manual-transfer/previews/:name` | an e-mail (template name) or `invoice`, rendered with a made-up order |
 | POST | `/admin/manual-transfer/payments/:id/confirm` | confirm a transfer and capture the payment |
 | POST | `/admin/manual-transfer/payments/:id/underpaid` | record a partial transfer (status `underpaid`) |
-| GET | `/admin/manual-transfer/config` | `{ show_credit, proof_retention_days }` for the Admin pages |
+| GET | `/admin/manual-transfer/config` | `{ show_credit, proof_retention_days, notifications: { active, enabled, admin_recipients: { source, emails }, payment_url } }` for the Admin pages |
 | GET | `/admin/manual-transfer/proofs/:id/url` | a signed link to view a proof, valid 5 minutes |
 | POST | `/admin/manual-transfer/proofs/:id/reject` | reject a pending proof, `{ reason }` required |
 
@@ -297,7 +328,8 @@ Events for notifications: `manual_transfer.proof_uploaded` and `manual_transfer.
 
 ### Development
 
-`integration-tests/` holds the E2E suite and the test app: see [integration-tests/README.md](integration-tests/README.md).
+`integration-tests/` holds the E2E suite, the test app and the storefront run (`storefront.mjs`: the example installed in
+a pinned starter checkout, checkout to "paid" in Chromium): see [integration-tests/README.md](integration-tests/README.md).
 `npm run email:preview -- <dir>` renders every e-mail and the invoice with a made-up order, without Medusa.
 
 ### Roadmap
@@ -358,7 +390,17 @@ Events for notifications: `manual_transfer.proof_uploaded` and `manual_transfer.
   (`notifications.templatesDir`).
 - **Invoice PDF pro-forma**: nama, logo, alamat toko, nomor order, referensi, barang dan total, detail rekening, batas
   waktu. Terlampir di email order, bisa diunduh pembeli dan dari halaman order; layout-nya bisa diganti
-  (`invoice.render`).
+  (`invoice.render`). Font Noto Sans (lisensi terbuka, subset Latin) disematkan sehingga nama seperti
+  "José Müller-Ñúñez" tetap utuh; `invoice.fontPath` untuk memakai font toko sendiri.
+- **Penerima email admin**: isi `notifications.adminEmails` (disarankan). Kalau kosong, semua user Admin menerimanya;
+  plugin menulis peringatan di log dan **Settings → Manual transfer → Notifikasi email** menampilkan siapa saja
+  penerimanya saat ini serta `paymentUrl` yang dipakai di email pembeli.
+- **Contoh storefront** untuk Medusa Next.js Starter (`examples/nextjs-starter`, ikut paket npm): halaman instruksi
+  (detail rekening dengan tombol salin, nominal persis, kode referensi, hitung mundur, catatan biaya OUR, unduh invoice)
+  dan upload bukti dengan statusnya, teks EN + ID. Pasang dengan
+  `node node_modules/medusa-payment-manual-transfer/examples/nextjs-starter/install.mjs ../storefront-anda`, lalu isi
+  `notifications.paymentUrl` dengan `https://<storefront>/transfer/{order_id}?token={token}`. Detail:
+  [examples/nextjs-starter/README.md](examples/nextjs-starter/README.md).
 - Email dan invoice **hanya memakai identitas toko Anda** (Settings → Manual transfer → Detail toko). Menu
   **Pratinjau** di sana membuka setiap email dan invoice dengan order contoh.
 - **Tes email tanpa provider asli**: provider `medusa-payment-manual-transfer/providers/email-preview` menulis setiap
@@ -374,7 +416,7 @@ English). Hanya kalau Locking Module dimatikan, plugin memakai lock di prosesnya
 
 **Roadmap**: adapter penyimpanan bukti ke bucket privat (S3, Cloudflare R2, …) dengan signed URL, belum dikerjakan.
 
-Halaman storefront menyusul di fase berikutnya. Konfigurasi lengkap ada di bagian English di atas.
+Konfigurasi lengkap ada di bagian English di atas.
 
 **Selalu cek mutasi di aplikasi bank sebelum konfirmasi, jangan hanya percaya bukti transfer.**
 

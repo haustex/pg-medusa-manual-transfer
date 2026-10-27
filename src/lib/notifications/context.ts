@@ -101,7 +101,7 @@ export async function loadTransferDocument(container: MedusaContainer, orderId: 
       "currency_code",
       "created_at",
       "metadata",
-      "subtotal",
+      "item_subtotal",
       "shipping_total",
       "tax_total",
       "discount_total",
@@ -144,7 +144,8 @@ export async function loadTransferDocument(container: MedusaContainer, orderId: 
         unit_price: num(item.unit_price),
         total: num(item.total),
       })),
-      subtotal: num(order.subtotal),
+      // Order "subtotal" includes shipping since Medusa 2.x: the invoice lists items, then shipping
+      subtotal: num(order.item_subtotal),
       shipping_total: num(order.shipping_total),
       tax_total: num(order.tax_total),
       discount_total: num(order.discount_total),

@@ -1,8 +1,10 @@
-import type { MedusaContainer } from "@medusajs/framework/types"
-import { MedusaError } from "@medusajs/framework/utils"
+import fontkit from "@pdf-lib/fontkit"
+import type { Logger, MedusaContainer } from "@medusajs/framework/types"
+import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
+import fs from "node:fs"
 import path from "node:path"
 import * as pdfLib from "pdf-lib"
-import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb, StandardFonts } from "pdf-lib"
+import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib"
 import {
   documentContext,
   formatDay,
@@ -21,6 +23,11 @@ import { getPluginOptions, NotificationLocale } from "./plugin-options"
  * or a module path (relative to the app's working directory) whose default
  * export is one. It gets the InvoiceContext below and pdf-lib, and returns the
  * PDF bytes.
+ *
+ * Text is set in Noto Sans (SIL Open Font License, subset to the Latin
+ * ranges, shipped in assets/fonts), embedded as a subset, so names like
+ * "José Müller-Ñúñez" keep their accents. `invoice.fontPath` swaps in the
+ * store's own TTF/OTF files.
  */
 
 const LABELS: Record<NotificationLocale, Record<string, string>> = {
@@ -101,8 +108,92 @@ export type InvoiceContext = {
   reference: string | null
   currency: string
   notes: string[]
+  /** Font files (TTF/OTF bytes) of the invoice: the bundled Noto Sans, or `invoice.fontPath` */
+  fonts: InvoiceFontFiles
+  /** Embeds `fonts` into a document, for custom layouts: `const { regular, bold, mono } = await ctx.embedFonts(pdf)` */
+  embedFonts: (pdf: PDFDocument) => Promise<Fonts>
   /** The loaded order and payment, for custom layouts */
   document: TransferDocument
+}
+
+export type InvoiceFontFiles = { regular: Uint8Array; bold: Uint8Array; mono: Uint8Array }
+
+type Fonts = { regular: PDFFont; bold: PDFFont; mono: PDFFont }
+
+const BUNDLED_FONTS = { regular: "NotoSans-Regular.ttf", bold: "NotoSans-Bold.ttf", mono: "NotoSansMono-Bold.ttf" }
+
+/** assets/fonts of the package: two levels above src/lib, four above .medusa/server/src/lib */
+function bundledFontDir(): string {
+  let dir = __dirname
+  for (let i = 0; i < 6; i++) {
+    const candidate = path.join(dir, "assets", "fonts")
+    if (fs.existsSync(path.join(candidate, BUNDLED_FONTS.regular))) {
+      return candidate
+    }
+    dir = path.dirname(dir)
+  }
+  throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "manual transfer: the bundled invoice fonts are missing (assets/fonts)")
+}
+
+/** Font files are read once per process: they never change while the app runs */
+const fontFiles = new Map<string, Uint8Array>()
+
+function readFont(file: string): Uint8Array {
+  let bytes = fontFiles.get(file)
+  if (!bytes) {
+    bytes = fs.readFileSync(file)
+    fontFiles.set(file, bytes)
+  }
+  return bytes
+}
+
+/**
+ * The bundled fonts, or the store's (`invoice.fontPath`, relative to the app's
+ * working directory): one file for every style, or { regular, bold?, mono? }
+ * where bold falls back to regular and mono to the bundled mono font. A file
+ * that cannot be read logs a warning and the bundled fonts are used.
+ */
+export function invoiceFontFiles(container: MedusaContainer): InvoiceFontFiles {
+  const bundled = bundledFontDir()
+  const fallback = () => ({
+    regular: readFont(path.join(bundled, BUNDLED_FONTS.regular)),
+    bold: readFont(path.join(bundled, BUNDLED_FONTS.bold)),
+    mono: readFont(path.join(bundled, BUNDLED_FONTS.mono)),
+  })
+  const option = getPluginOptions(container).invoice?.fontPath
+  if (!option) {
+    return fallback()
+  }
+  const paths = typeof option === "string" ? { regular: option } : option
+  const resolve = (file: string) => path.resolve(process.cwd(), file)
+  try {
+    const regular = readFont(resolve(paths.regular))
+    return {
+      regular,
+      bold: paths.bold ? readFont(resolve(paths.bold)) : regular,
+      mono: paths.mono ? readFont(resolve(paths.mono)) : readFont(path.join(bundled, BUNDLED_FONTS.mono)),
+    }
+  } catch (error) {
+    container
+      .resolve<Logger>(ContainerRegistrationKeys.LOGGER)
+      .warn(`manual transfer: invoice.fontPath unreadable (${(error as Error).message}), using the bundled fonts`)
+    return fallback()
+  }
+}
+
+/** Embeds the font files as subsets: only the glyphs the invoice uses end up in the PDF */
+export async function embedInvoiceFonts(pdf: PDFDocument, files: InvoiceFontFiles): Promise<Fonts> {
+  pdf.registerFontkit(fontkit)
+  // The same file for several styles (fontPath as one string) is embedded once
+  const embedded = new Map<Uint8Array, Promise<PDFFont>>()
+  const embed = (bytes: Uint8Array) => {
+    if (!embedded.has(bytes)) {
+      embedded.set(bytes, pdf.embedFont(bytes, { subset: true }))
+    }
+    return embedded.get(bytes)!
+  }
+  const [regular, bold, mono] = await Promise.all([embed(files.regular), embed(files.bold), embed(files.mono)])
+  return { regular, bold, mono }
 }
 
 export function invoiceContext(
@@ -125,6 +216,7 @@ export function invoiceContext(
     totals.push({ label: labels.remaining, value: money(doc.amount_remaining), strong: true })
   }
   const note = getPluginOptions(container).invoice?.note
+  const fonts = invoiceFontFiles(container)
   return {
     locale,
     labels,
@@ -149,28 +241,36 @@ export function invoiceContext(
     reference: doc.payment.data.reference ?? null,
     currency: currency.toUpperCase(),
     notes: [labels.reference_note, labels.fees_note, ...(note ? [note] : [])],
+    fonts,
+    embedFonts: (pdf) => embedInvoiceFonts(pdf, fonts),
     document: doc,
   }
 }
 
-type Fonts = { regular: PDFFont; bold: PDFFont; mono: PDFFont }
+const characterSets = new WeakMap<PDFFont, Set<number>>()
 
-/** Standard PDF fonts only cover WinAnsi: other characters lose their accents, or become "?" */
-function encodable(font: PDFFont, value: string): string {
+function supports(font: PDFFont, char: string): boolean {
+  let set = characterSets.get(font)
+  if (!set) {
+    set = new Set(font.getCharacterSet())
+    characterSets.set(font, set)
+  }
+  return set.has(char.codePointAt(0)!)
+}
+
+/**
+ * Characters the font has no glyph for (the bundled fonts cover the Latin
+ * scripts) lose their accents, or become "?", instead of an empty box
+ */
+export function encodable(font: PDFFont, value: string): string {
   let out = ""
   for (const char of value) {
-    try {
-      font.encodeText(char)
+    if (char === "\n" || supports(font, char)) {
       out += char
-    } catch {
-      const plain = char.normalize("NFKD").replace(/[̀-ͯ]/g, "")
-      try {
-        font.encodeText(plain)
-        out += plain
-      } catch {
-        out += "?"
-      }
+      continue
     }
+    const plain = char.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    out += plain && [...plain].every((c) => supports(font, c)) ? plain : "?"
   }
   return out
 }
@@ -240,11 +340,7 @@ export async function defaultInvoicePdf(ctx: InvoiceContext): Promise<Uint8Array
   pdf.setAuthor(ctx.store.name)
   pdf.setCreator(ctx.store.name)
   pdf.setProducer(ctx.store.name)
-  const fonts: Fonts = {
-    regular: await pdf.embedFont(StandardFonts.Helvetica),
-    bold: await pdf.embedFont(StandardFonts.HelveticaBold),
-    mono: await pdf.embedFont(StandardFonts.CourierBold),
-  }
+  const fonts = await ctx.embedFonts(pdf)
   const logo = await loadLogo(pdf, ctx.store.logo_url)
 
   let page: PDFPage = pdf.addPage([595.28, 841.89])

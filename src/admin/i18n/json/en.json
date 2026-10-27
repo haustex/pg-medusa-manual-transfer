@@ -193,6 +193,19 @@
         "invoice": "Pro-forma invoice (PDF)"
       }
     },
+    "notifications": {
+      "title": "E-mail notifications",
+      "description": "Set in medusa-config under the plugin's notifications options.",
+      "on": "Sending",
+      "off": "Turned off",
+      "noModule": "No Notification Module",
+      "adminRecipients": "Admin e-mails go to",
+      "noRecipients": "Nobody",
+      "fallback": "notifications.adminEmails is not set, so every Admin user ({{count}}) receives the admin e-mails. Recommended: set notifications.adminEmails in medusa-config to the addresses that should get them.",
+      "fromOption": "From notifications.adminEmails.",
+      "paymentUrl": "Upload link in the buyer e-mails",
+      "noPaymentUrl": "notifications.paymentUrl is not set: the buyer e-mails carry no link to the payment page."
+    },
     "credit": {
       "text": "PG Medusa Transfer Manual · by Haus Kayu, perkakas jati dari Jepara",
       "help": "Help"

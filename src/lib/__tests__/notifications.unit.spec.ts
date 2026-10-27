@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { PDFDocument } from "pdf-lib"
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
 import { defaultInvoicePdf, invoiceContext } from "../invoice"
 import { documentContext, StoreIdentity } from "../notifications/context"
 import { renderEmail } from "../notifications/render"
@@ -18,13 +18,64 @@ const store: StoreIdentity = {
   website: "https://toko.test",
 }
 
+const warnings: string[] = []
+
 function container(options: Record<string, unknown> = {}) {
   const config = {
     plugins: [{ resolve: "medusa-payment-manual-transfer", options }],
     projectConfig: { http: { jwtSecret: "unit-secret" } },
     modules: {},
   }
-  return { resolve: () => config } as never
+  const logger = { warn: (message: string) => warnings.push(message) }
+  return { resolve: (key: string) => (key === "logger" ? logger : config) } as never
+}
+
+/**
+ * The text of every page, read back the way a PDF viewer copies it: glyph ids
+ * of each `Tj` mapped to Unicode through the font's ToUnicode CMap.
+ */
+async function pdfText(bytes: Uint8Array): Promise<string> {
+  const pdf = await PDFDocument.load(bytes)
+  const decode = (stream: unknown) => Buffer.from(decodePDFRawStream(stream as PDFRawStream).decode()).toString("latin1")
+  const lines: string[] = []
+  for (const page of pdf.getPages()) {
+    const fonts = new Map<string, Map<string, string>>()
+    const fontDict = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict)
+    for (const [name, ref] of fontDict.entries()) {
+      const font = pdf.context.lookup(ref as PDFRef, PDFDict)
+      const cmap = new Map<string, string>()
+      for (const [, glyph, unicode] of decode(font.lookup(PDFName.of("ToUnicode"))).matchAll(/<([0-9a-f]{4})> <([0-9a-f]+)>/gi)) {
+        cmap.set(glyph.toLowerCase(), String.fromCharCode(...unicode.match(/.{4}/g)!.map((h) => parseInt(h, 16))))
+      }
+      fonts.set(name.asString(), cmap)
+    }
+    const contents = page.node.Contents()!
+    const streams = contents instanceof PDFArray ? contents.asArray().map((ref) => pdf.context.lookup(ref)) : [contents]
+    let current = new Map<string, string>()
+    for (const stream of streams) {
+      for (const [, font, hex] of decode(stream).matchAll(/(\/\S+) [\d.]+ Tf|<([0-9a-f]*)> Tj/gi)) {
+        if (font) {
+          current = fonts.get(font) ?? new Map()
+        } else {
+          lines.push(hex.match(/.{4}/g)?.map((id) => current.get(id.toLowerCase()) ?? "\ufffd").join("") ?? "")
+        }
+      }
+    }
+  }
+  return lines.join("\n")
+}
+
+/** The fonts the first page uses (BaseFont without pdf-lib's numeric suffix) */
+async function fontNames(bytes: Uint8Array): Promise<string[]> {
+  const pdf = await PDFDocument.load(bytes)
+  const fonts = pdf.getPages()[0].node.Resources()!.lookup(PDFName.of("Font"), PDFDict)
+  const names = fonts.values().map((ref) => {
+    const font = pdf.context.lookup(ref as PDFRef, PDFDict)
+    const descendant = font.lookup(PDFName.of("DescendantFonts"), PDFArray).lookup(0, PDFDict)
+    expect(descendant.lookup(PDFName.of("FontDescriptor"), PDFDict).has(PDFName.of("FontFile2"))).toBe(true)
+    return font.lookup(PDFName.of("BaseFont"), PDFName).asString().replace(/^\/|-\d+$/g, "")
+  })
+  return [...new Set(names)].sort()
 }
 
 const ALL: TemplateName[] = [...BUYER_TEMPLATES, ...ADMIN_TEMPLATES]
@@ -108,6 +159,45 @@ describe("pro-forma invoice", () => {
     expect(pdf.getTitle()).toBe("Pro-forma invoice MT-7K3QX-9PA2B")
     expect(pdf.getProducer()).toBe("Toko Jati Čakovec — ü ☃")
     expect(Buffer.from(bytes).toString("latin1")).not.toMatch(/haus\s*kayu|hauskayu|pdf-lib/i)
+  })
+
+  it("embeds a Latin font, so accented names stay intact", async () => {
+    const doc = sampleDocument({ ...store, name: "Mueble Ñandú S.L." })
+    doc.order.billing_lines = ["José Müller-Ñúñez", "Calle Señor 5", "Łódź, Polska"]
+    doc.order.items[0].title = "Bangku jati “Çatal” — ½ m²"
+    const bytes = await defaultInvoicePdf(invoiceContext(container(), doc, "en"))
+    const text = await pdfText(bytes)
+    for (const part of ["José Müller-Ñúñez", "Calle Señor 5", "Łódź, Polska", "Mueble Ñandú S.L.", "Bangku jati “Çatal” — ½ m²", "MT-7K3QX-9PA2B"]) {
+      expect(text).toContain(part)
+    }
+    expect(text).not.toContain("\ufffd")
+    // Subset: the PDF carries the glyphs it uses, not the whole font files (~410 KB)
+    expect(bytes.length).toBeLessThan(120_000)
+    expect(await fontNames(bytes)).toEqual(["NotoSans-Bold", "NotoSans-Regular", "NotoSansMono-Bold"])
+  })
+
+  it("replaces characters outside the font instead of drawing empty boxes", async () => {
+    const doc = sampleDocument(store)
+    doc.order.billing_lines = ["山田 太郎 Ā"]
+    const text = await pdfText(await defaultInvoicePdf(invoiceContext(container(), doc, "en")))
+    expect(text).toContain("?? ?? Ā")
+  })
+
+  it("uses the store's font from invoice.fontPath, and the bundled one when it is unreadable", async () => {
+    const regular = path.resolve(__dirname, "../../../assets/fonts/NotoSansMono-Bold.ttf")
+    const ctx = invoiceContext(container({ invoice: { fontPath: path.relative(process.cwd(), regular) } }), sampleDocument(store), "en")
+    expect(Buffer.from(ctx.fonts.regular).equals(fs.readFileSync(regular))).toBe(true)
+    expect(ctx.fonts.bold).toBe(ctx.fonts.regular)
+    const pdf = await PDFDocument.load(await defaultInvoicePdf(ctx))
+    expect(await fontNames(await pdf.save())).toEqual(["NotoSansMono-Bold"])
+    // regular, bold and (the bundled) mono are the same file here: embedded once
+    const embedded = pdf.context.enumerateIndirectObjects().filter(([, object]) => object instanceof PDFDict && object.get(PDFName.of("Type")) === PDFName.of("Font") && object.has(PDFName.of("DescendantFonts")))
+    expect(embedded).toHaveLength(1)
+
+    warnings.length = 0
+    const missing = invoiceContext(container({ invoice: { fontPath: "./no-such-font.ttf" } }), sampleDocument(store), "en")
+    expect(warnings[0]).toMatch(/invoice.fontPath unreadable/)
+    expect(await fontNames(await defaultInvoicePdf(missing))).toContain("NotoSans-Regular")
   })
 
   it("shows what is left after a partial transfer, in Indonesian", () => {

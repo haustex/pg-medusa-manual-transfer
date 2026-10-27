@@ -39,7 +39,7 @@ export async function phase4(ctx) {
     placedHtml.includes(STORE) && placedHtml.includes(o.payment.data.account.account_number) && placedHtml.includes("TESTIDJA") && placedHtml.includes(o.payment.data.reference) && /GMT\+7/.test(placedHtml) && placed?.subject?.includes(`#${o.display_id}`),
     { subject: placed?.subject }
   )
-  const link = placedHtml.match(/https:\/\/shop\.example\.test\/transfer\/([^?"]+)\?token=([A-Za-z0-9_-]+)/)
+  const link = placedHtml.match(/http:\/\/localhost:9410\/transfer\/([^?"]+)\?token=([A-Za-z0-9_-]+)/)
   check("order e-mail: payment link with the order's upload token", link?.[1] === o.orderId && link?.[2] === o.token, link?.[0])
   const viaLink = await raw("GET", `/store/manual-transfer/orders/${o.orderId}?token=${link?.[2]}`)
   check("the e-mailed token opens the buyer's payment page", viaLink.status === 200, viaLink.status)

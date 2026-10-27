@@ -19,6 +19,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { AccountForm, cleanAccountInput, isAccountInputComplete } from "../../../components/account-form"
 import { CreditFooter } from "../../../components/credit-footer"
+import { NotificationSettingsSection } from "../../../components/notification-settings"
 import { StoreIdentitySection } from "../../../components/store-identity"
 import {
   AccountInput,
@@ -326,6 +327,7 @@ const ManualTransferSettingsPage = () => {
         <EditAccountDrawer account={editing} onClose={() => setEditing(null)} />
       </Container>
       <StoreIdentitySection />
+      <NotificationSettingsSection />
       <CreditFooter />
     </div>
   )

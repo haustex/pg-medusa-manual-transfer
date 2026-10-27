@@ -33,9 +33,10 @@ module.exports = defineConfig({
         proofRetentionDays: 30,
         adminReminders: { verificationBusinessDays: 1, underpaidBusinessDays: 3 },
         notifications: {
-          adminEmails: ["ops@e2e.test"],
-          // Never requested: it only ends up as a link in the e-mails
-          paymentUrl: "https://shop.example.test/transfer/{order_id}?token={token}",
+          // MT_NO_ADMIN_EMAILS=1: the fallback (every Admin user), for the settings page check
+          ...(process.env.MT_NO_ADMIN_EMAILS === "1" ? {} : { adminEmails: ["ops@e2e.test"] }),
+          // The example storefront's payment page (integration-tests/storefront.mjs serves it on 9410)
+          paymentUrl: process.env.MT_PAYMENT_URL || "http://localhost:9410/transfer/{order_id}?token={token}",
         },
       },
     },

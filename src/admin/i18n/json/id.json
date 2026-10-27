@@ -193,6 +193,19 @@
         "invoice": "Invoice pro-forma (PDF)"
       }
     },
+    "notifications": {
+      "title": "Notifikasi email",
+      "description": "Diatur di medusa-config pada opsi notifications plugin.",
+      "on": "Aktif",
+      "off": "Dimatikan",
+      "noModule": "Tanpa Notification Module",
+      "adminRecipients": "Email admin dikirim ke",
+      "noRecipients": "Tidak ada",
+      "fallback": "notifications.adminEmails belum diisi, jadi semua user Admin ({{count}}) menerima email admin. Disarankan: isi notifications.adminEmails di medusa-config dengan alamat yang memang perlu menerimanya.",
+      "fromOption": "Dari notifications.adminEmails.",
+      "paymentUrl": "Link upload di email pembeli",
+      "noPaymentUrl": "notifications.paymentUrl belum diisi: email pembeli tidak memuat link ke halaman pembayaran."
+    },
     "credit": {
       "text": "PG Medusa Transfer Manual · by Haus Kayu, perkakas jati dari Jepara",
       "help": "Bantuan"

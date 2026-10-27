@@ -108,6 +108,21 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   supaya producer bukan "pdf-lib"; `invoice.render` mengganti layout. Pratinjau: `GET /admin/manual-transfer/previews/:name`
   (order contoh, `sample.ts`) dan `npm run email:preview` (tanpa Medusa, butuh build). Provider
   `providers/email-preview` menulis email ke folder (dipakai app uji).
+- **Font invoice**: Noto Sans Regular/Bold + Noto Sans Mono Bold (OFL), di-subset ke rentang Latin (`assets/fonts`, ikut
+  paket), disematkan `subset: true` lewat `@pdf-lib/fontkit`; file yang sama di-embed sekali. `invoice.fontPath` (string
+  atau `{ regular, bold?, mono? }`) relatif ke cwd; gagal baca → warning + font bawaan. Karakter tanpa glyph: aksen
+  dibuang atau "?" (`getCharacterSet`). Unit test membaca teks PDF lewat ToUnicode CMap. Subtotal invoice =
+  `item_subtotal` (order `subtotal` di Medusa 2.19 sudah termasuk ongkir).
+- **Penerima email admin**: `adminRecipients()` → `{ source: "option" | "admin_users", emails }`; fallback ke semua user
+  Admin ditulis warning sekali per proses dan ditampilkan di settings (`GET /admin/manual-transfer/config` →
+  `notifications`). README menyarankan `adminEmails`.
+- **Fase 5 — storefront**: `examples/nextjs-starter` (ikut paket npm, dikecualikan dari tsconfig/eslint plugin) +
+  `install.mjs` (salin `src/`, 4 edit ber-anchor yang idempotent). Halaman `/[countryCode]/transfer/[orderId]`, upload &
+  invoice lewat route handler `/api/manual-transfer/...` (bukan server action: tanpa batas body, JWT tetap di server).
+  Starter (deprecated upstream, pengganti dtc-starter) di-pin commit `9818886`; 19 error tsc bawaan starter, contoh
+  tidak menambah. `Intl.DateTimeFormat` menolak `dateStyle` + `timeZoneName`. Uji: `integration-tests/storefront.mjs`
+  (storefront `http://localhost:9410`, bukan 127.0.0.1, karena middleware starter redirect ke host Next.js; stok
+  produk uji di-top-up tiap run). Hasil: 41/41 cek flow + 2/2 fallback settings.
 - Fase 4 (+ a/b/c) diuji E2E: 177/177 cek (Fase 1–4) di mode shared dan split, 2/2 di `no-credit`; `ui.mjs`: footer
   ada (default) dan hilang (`showCredit: false`) di kedua halaman plugin.
 - Fase 3 (+ a/b/c) diuji E2E: 136/136 cek (Fase 1–3) di mode shared dan split.

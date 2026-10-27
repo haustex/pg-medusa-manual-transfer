@@ -78,15 +78,42 @@ function notificationModule(container: MedusaContainer): INotificationModuleServ
   return container.hasRegistration(Modules.NOTIFICATION) ? container.resolve(Modules.NOTIFICATION) : null
 }
 
-/** notifications.adminEmails, or every Admin user */
-async function adminRecipients(container: MedusaContainer): Promise<string[]> {
+export type AdminRecipients = {
+  /** "option": notifications.adminEmails; "admin_users": the fallback, every Admin user */
+  source: "option" | "admin_users"
+  emails: string[]
+}
+
+let warnedFallback = false
+
+/**
+ * notifications.adminEmails (recommended), or else every Admin user. The
+ * fallback is logged once per process and shown in the Admin settings, so
+ * nobody receives order e-mails without the store knowing.
+ */
+export async function adminRecipients(container: MedusaContainer, { warn = true } = {}): Promise<AdminRecipients> {
   const configured = getNotificationOptions(container).adminEmails
   if (configured?.length) {
-    return [...new Set(configured.map((email) => email.trim()).filter(Boolean))]
+    return { source: "option", emails: [...new Set(configured.map((email) => email.trim()).filter(Boolean))] }
   }
   const query = container.resolve(ContainerRegistrationKeys.QUERY)
   const { data } = await query.graph({ entity: "user", fields: ["email"] })
-  return [...new Set(data.map((user) => user.email).filter((email): email is string => !!email))]
+  const emails = [...new Set(data.map((user) => user.email).filter((email): email is string => !!email))]
+  if (warn && !warnedFallback && emails.length) {
+    warnedFallback = true
+    container
+      .resolve<Logger>(ContainerRegistrationKeys.LOGGER)
+      .warn(
+        `manual transfer: notifications.adminEmails is not set, the admin e-mails go to every Admin user (${emails.length}). ` +
+          "Set notifications.adminEmails in medusa-config to choose the recipients."
+      )
+  }
+  return { source: "admin_users", emails }
+}
+
+/** Whether e-mails go out at all: enabled in the options and a Notification Module in the app */
+export function notificationsActive(container: MedusaContainer): boolean {
+  return getNotificationOptions(container).enabled && !!notificationModule(container)
 }
 
 type Outgoing = {
@@ -176,7 +203,7 @@ export async function notifyTransferChange(
     const context = documentContext(container, doc, locale)
     const actorEntry = lastEntry(doc, HISTORY_OF[change])
     const actor = actorEntry?.actor_type === "user" && actorEntry.actor_id ? await adminName(container, actorEntry.actor_id) : null
-    for (const to of await adminRecipients(container)) {
+    for (const to of (await adminRecipients(container)).emails) {
       messages.push({
         to,
         template: "admin_status_changed",
@@ -231,7 +258,7 @@ export async function notifyAdminsOverdue(container: MedusaContainer, paymentIds
   }))
   const context = { locale, store, items, ...adminUrls(container) }
   const ids = [...paymentIds].sort().join(",")
-  const recipients = await adminRecipients(container)
+  const { emails: recipients } = await adminRecipients(container)
   await deliver(
     container,
     recipients.map((to) => ({
