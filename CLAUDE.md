@@ -139,7 +139,8 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   `pg-medusa-manual-transfer`; sebelumnya opsi plugin diam-diam kosong).
 - **Fase 6**: CI matrix 2.19.0 / 2.22.1 (`scripts/use-medusa.mjs`, `@medusajs/ui` mengikuti dashboard: 4.2.8),
   container `mt-spike-*` di runner. `release.yml` dipicu tag `v*.*.*`, memanggil CI (`workflow_call`), publish OIDC
-  `--provenance` dari environment `npm`, Node 24, tanpa `registry-url`. `scripts/check-pack.mjs` (= `npm run
+  `--provenance` dari environment `npm`, Node 24 + `npm@^11.21.0`, tanpa `registry-url`; versi yang sudah ada di npm
+  dilewati (tetap hijau). `workflow_dispatch` = hanya cek pertukaran token OIDC (pola sama dengan plugin doit). `scripts/check-pack.mjs` (= `npm run
   pack:check`) memeriksa isi paket dan tidak ada kredit Haus Kayu di kode yang dilihat pembeli.
 - Fase 4 (+ a/b/c) diuji E2E: 177/177 cek (Fase 1–4) di mode shared dan split, 2/2 di `no-credit`; `ui.mjs`: footer
   ada (default) dan hilang (`showCredit: false`) di kedua halaman plugin.
