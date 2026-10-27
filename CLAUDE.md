@@ -123,6 +123,24 @@ node scripts/guard.mjs <perintah> [args]  # perintah lain: medusa db:migrate, me
   tidak menambah. `Intl.DateTimeFormat` menolak `dateStyle` + `timeZoneName`. Uji: `integration-tests/storefront.mjs`
   (storefront `http://localhost:9410`, bukan 127.0.0.1, karena middleware starter redirect ke host Next.js; stok
   produk uji di-top-up tiap run). Hasil: 41/41 cek flow + 2/2 fallback settings.
+- **Toko produksi** (`~/hauskayu/store`, dicek baca-saja 2026-10-27): **dtc-starter** (Turborepo `@dtc/backend` +
+  `@dtc/storefront`, Medusa 2.22, Next 16.3.8, React 19, `proxy.ts`), sudah banyak dikustomisasi.
+- **Inti storefront** `src/storefront` (React + Fetch + labels, tanpa dependensi starter, dikecualikan dari tsconfig
+  backend, dicek `tsc -p src/storefront`); installer kedua contoh (`examples/shared/install.mjs`) menyalinnya ke
+  `src/modules/manual-transfer/core/` (glob Tailwind kedua starter). Kelas default = token `@medusajs/ui-preset`,
+  bisa diganti prop `theme`. dtc beda 3 baris: `NEXT_PUBLIC_MEDUSA_BACKEND_URL`, Button dari
+  `@modules/common/components/ui`, `revalidateTag(tag, { expire: 0 })`. dtc dipasang dengan `corepack pnpm@10.11.1
+  --filter @dtc/storefront`, di-pin commit `6965d8a`, port 9420.
+- **IP pembeli** (`src/lib/client-ip.ts`): `x-mt-client-ip` hanya dipakai kalau `x-mt-proxy-secret` = `trustedProxySecret`
+  (opsi → env `MANUAL_TRANSFER_PROXY_SECRET`), selain itu `req.socket.remoteAddress`. `req.ip` tidak dipakai: Medusa
+  memasang `trust proxy = 1` tanpa syarat, jadi `X-Forwarded-For` bisa dipalsukan. Storefront mengambil IP dari
+  `X-Real-IP` lalu entri pertama `X-Forwarded-For`.
+- **Plugin dikenali dari `name` di package.json** kalau `resolve` berupa path (checkout CI bernama
+  `pg-medusa-manual-transfer`; sebelumnya opsi plugin diam-diam kosong).
+- **Fase 6**: CI matrix 2.19.0 / 2.22.1 (`scripts/use-medusa.mjs`, `@medusajs/ui` mengikuti dashboard: 4.2.8),
+  container `mt-spike-*` di runner. `release.yml` dipicu tag `v*.*.*`, memanggil CI (`workflow_call`), publish OIDC
+  `--provenance` dari environment `npm`, Node 24, tanpa `registry-url`. `scripts/check-pack.mjs` (= `npm run
+  pack:check`) memeriksa isi paket dan tidak ada kredit Haus Kayu di kode yang dilihat pembeli.
 - Fase 4 (+ a/b/c) diuji E2E: 177/177 cek (Fase 1–4) di mode shared dan split, 2/2 di `no-credit`; `ui.mjs`: footer
   ada (default) dan hilang (`showCredit: false`) di kedua halaman plugin.
 - Fase 3 (+ a/b/c) diuji E2E: 136/136 cek (Fase 1–3) di mode shared dan split.

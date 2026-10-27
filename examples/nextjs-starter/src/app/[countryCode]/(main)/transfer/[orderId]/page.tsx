@@ -1,9 +1,9 @@
 import { getLocale } from "@lib/data/locale-actions"
-import { retrieveTransfer } from "@lib/manual-transfer/data"
-import { labelsFor, pickLocale } from "@lib/manual-transfer/labels"
-import { Heading, Text } from "@medusajs/ui"
-import LocalizedClientLink from "@modules/common/components/localized-client-link"
-import TransferTemplate from "@modules/manual-transfer/templates/transfer-template"
+import { retrieveTransfer } from "@lib/manual-transfer/backend"
+import ProofUpload from "@modules/manual-transfer/components/proof-upload"
+import TransferNotFound from "@modules/manual-transfer/core/components/transfer-not-found"
+import TransferView from "@modules/manual-transfer/core/components/transfer-view"
+import { pickLocale } from "@modules/manual-transfer/core/labels"
 import { Metadata } from "next"
 import { headers } from "next/headers"
 
@@ -33,19 +33,19 @@ export default async function TransferPage(props: Props) {
   const transfer = await retrieveTransfer(orderId, token ?? null)
 
   if (!transfer) {
-    const t = labelsFor(locale)
-    return (
-      <div className="content-container flex flex-col gap-y-4 py-16 max-w-xl" data-testid="transfer-not-found">
-        <Heading level="h1" className="text-2xl-semi">
-          {t.notFoundTitle}
-        </Heading>
-        <Text className="txt-medium text-ui-fg-subtle">{t.notFoundText}</Text>
-        <LocalizedClientLink href="/store" className="txt-medium-plus text-ui-fg-interactive">
-          {t.continueShopping}
-        </LocalizedClientLink>
-      </div>
-    )
+    return <TransferNotFound locale={locale} homeHref={`/${countryCode}/store`} />
   }
 
-  return <TransferTemplate transfer={transfer} token={token ?? null} locale={locale} />
+  const api = `/api/manual-transfer/${encodeURIComponent(transfer.order_id)}`
+  const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : ""
+  return (
+    <TransferView
+      transfer={transfer}
+      token={token ?? null}
+      locale={locale}
+      uploadUrl={`${api}/proofs`}
+      invoiceUrl={`${api}/invoice?locale=${locale}${tokenQuery}`}
+      Upload={ProofUpload}
+    />
+  )
 }

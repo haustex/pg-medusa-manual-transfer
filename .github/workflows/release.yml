@@ -1,0 +1,52 @@
+name: Release
+
+# Publishes to npm when a version tag (v0.1.0, …) is pushed, after the full CI
+# suite passed. npm trusted publishing (OIDC): no NPM_TOKEN secret, provenance
+# attached. setup-node gets no `registry-url`: it would write an .npmrc that
+# expects NODE_AUTH_TOKEN and get in the way of the OIDC exchange.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Node 24 ships npm 11, which supports trusted publishing (npm >= 11.5.1)
+          node-version: 24
+
+      - name: npm version
+        run: |
+          npm --version
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11||(a===11&&(b<5||(b===5&&c<1)))) { console.error("npm >= 11.5.1 needed for trusted publishing"); process.exit(1) }' "$(npm --version)"
+
+      - name: Tag matches package.json
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node scripts/check-pack.mjs
+
+      - name: Publish
+        run: npm publish --provenance --access public

@@ -1,7 +1,7 @@
 "use client"
 
 import { placeManualTransferOrder } from "@lib/manual-transfer/data"
-import { labelsFor, TransferLocale } from "@lib/manual-transfer/labels"
+import { labelsFor, TransferLocale } from "@modules/manual-transfer/core/labels"
 import { Button } from "@medusajs/ui"
 import ErrorMessage from "@modules/checkout/components/error-message"
 import { useState } from "react"

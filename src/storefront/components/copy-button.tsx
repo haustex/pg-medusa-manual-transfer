@@ -1,20 +1,24 @@
 "use client"
 
-import { CheckMini, SquareTwoStack } from "@medusajs/icons"
 import { useState } from "react"
+import { cx, resolveTheme, ThemeOverrides } from "../theme"
+import { CheckIcon, CopyIcon } from "./icons"
 
 /** Copies `value` to the clipboard; falls back to a hidden textarea where the Clipboard API is missing (plain http) */
 export default function CopyButton({
   value,
   label,
   copiedLabel,
+  theme,
   "data-testid": testId,
 }: {
   value: string
   label: string
   copiedLabel: string
+  theme?: ThemeOverrides
   "data-testid"?: string
 }) {
+  const t = resolveTheme(theme)
   const [copied, setCopied] = useState(false)
 
   const copy = async () => {
@@ -36,14 +40,8 @@ export default function CopyButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={copy}
-      className="inline-flex items-center gap-x-1 rounded-md border border-ui-border-base bg-ui-bg-base px-2 py-1 txt-compact-small-plus text-ui-fg-subtle hover:bg-ui-bg-base-hover hover:text-ui-fg-base shrink-0"
-      aria-label={`${label}: ${value}`}
-      data-testid={testId}
-    >
-      {copied ? <CheckMini /> : <SquareTwoStack />}
+    <button type="button" onClick={copy} className={cx(t.copyButton)} aria-label={`${label}: ${value}`} data-testid={testId}>
+      {copied ? <CheckIcon /> : <CopyIcon />}
       <span aria-live="polite">{copied ? copiedLabel : label}</span>
     </button>
   )

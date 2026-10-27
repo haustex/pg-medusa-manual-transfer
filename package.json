@@ -1,6 +1,6 @@
 {
   "name": "medusa-payment-manual-transfer",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Manual bank transfer with payment-proof upload and admin verification for Medusa v2 — by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
@@ -16,8 +16,14 @@
   "funding": "https://hauskayu.com",
   "files": [
     ".medusa/server",
+    "!.medusa/server/**/__tests__",
     "assets",
-    "examples"
+    "examples",
+    "src/storefront",
+    "!src/storefront/__tests__",
+    "!src/storefront/tsconfig.json",
+    "CHANGELOG.md",
+    "SECURITY.md"
   ],
   "exports": {
     "./package.json": "./package.json",
@@ -48,7 +54,7 @@
     "build": "medusa plugin:build",
     "dev": "medusa plugin:develop",
     "lint": "medusa lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p src/storefront",
     "test": "jest",
     "test:unit": "jest",
     "guard": "node scripts/guard.mjs",
@@ -57,7 +63,9 @@
     "test:e2e:setup": "node integration-tests/setup.mjs",
     "test:e2e": "node integration-tests/e2e/run.mjs shared && node integration-tests/e2e/run.mjs split && node integration-tests/e2e/run.mjs no-credit",
     "test:ui": "node integration-tests/ui.mjs",
-    "prepublishOnly": "medusa plugin:build"
+    "prepublishOnly": "medusa plugin:build",
+    "pack:check": "node scripts/check-pack.mjs",
+    "test:storefront": "node integration-tests/storefront.mjs all"
   },
   "devDependencies": {
     "@medusajs/admin-sdk": "2.19.0",

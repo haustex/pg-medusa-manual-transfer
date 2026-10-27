@@ -8,6 +8,7 @@ import fs from "node:fs"
 import { EMAIL_DIR, SERVER_PORT, WORKER_PORT } from "../env.mjs"
 import { startMedusa, stopAll, waitHealth } from "../processes.mjs"
 import { createContext } from "./context.mjs"
+import { clientIp } from "./client-ip.mjs"
 import { phase1 } from "./phase1.mjs"
 import { phase2 } from "./phase2.mjs"
 import { phase3, phase3Limits } from "./phase3.mjs"
@@ -56,6 +57,8 @@ async function main() {
   await phase2(ctx)
   console.log("\n--- phase 3 limits")
   await phase3Limits(ctx)
+  console.log("\n--- client IP behind a storefront")
+  await clientIp(ctx)
 
   return ctx
 }

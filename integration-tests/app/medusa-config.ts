@@ -30,6 +30,8 @@ module.exports = defineConfig({
       options: {
         showCredit: process.env.MT_SHOW_CREDIT !== "0",
         proofUploads: { perIp: 40, tokenExchangesPerIp: 30 },
+        // The example storefronts send the buyer's IP with this secret (env.mjs PROXY_SECRET)
+        trustedProxySecret: process.env.MT_PROXY_SECRET || "mt-e2e-proxy-secret",
         proofRetentionDays: 30,
         adminReminders: { verificationBusinessDays: 1, underpaidBusinessDays: 3 },
         notifications: {

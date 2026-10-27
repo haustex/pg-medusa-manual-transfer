@@ -1,9 +1,9 @@
 "use client"
 
-import { labelsFor, TransferLocale } from "@lib/manual-transfer/labels"
-import { isManualTransfer } from "@lib/manual-transfer/types"
 import { HttpTypes } from "@medusajs/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
+import { labelsFor, TransferLocale } from "@modules/manual-transfer/core/labels"
+import { isManualTransfer } from "@modules/manual-transfer/core/types"
 
 /** On the account's order page: a link to the payment instructions of a bank-transfer order */
 export default function OrderTransferLink({ order, locale = "en" }: { order: HttpTypes.StoreOrder; locale?: TransferLocale }) {

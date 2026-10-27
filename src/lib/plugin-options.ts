@@ -1,3 +1,5 @@
+import fs from "node:fs"
+import path from "node:path"
 import type { ConfigModule, MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
 import { BusinessCalendar, DEFAULT_TIMEZONE } from "./deadline"
@@ -21,6 +23,13 @@ export type ManualTransferPluginOptions = {
   autoCancelExpired?: boolean
   /** Secret for guest upload links and signed proof URLs. Default: MANUAL_TRANSFER_SECRET, then http.jwtSecret. */
   secret?: string
+  /**
+   * Shared secret of the storefront (or reverse proxy) that sends the buyer's
+   * IP in `x-mt-client-ip` with this value in `x-mt-proxy-secret`. Only then is
+   * that header used for the per-IP limits; otherwise the connection's IP
+   * counts. Default: MANUAL_TRANSFER_PROXY_SECRET; unset trusts no header.
+   */
+  trustedProxySecret?: string
   /**
    * When an admin is reminded (badge "late" in the Admin, digest e-mail) that a
    * payment waits for them. Counted in business days of the provider's
@@ -130,12 +139,36 @@ function configModule(container: MedusaContainer): ConfigModule {
   return container.resolve(ContainerRegistrationKeys.CONFIG_MODULE)
 }
 
+const packageNames = new Map<string, string | null>()
+
+/** The `name` in package.json of a plugin given by path (cached); null when there is none */
+function packageNameAt(dir: string): string | null {
+  if (!packageNames.has(dir)) {
+    let name: string | null = null
+    try {
+      name = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).name ?? null
+    } catch {
+      // not a package folder
+    }
+    packageNames.set(dir, name)
+  }
+  return packageNames.get(dir) ?? null
+}
+
+/** This plugin, installed from npm or given by path (a checkout under any folder name) */
+export function isThisPlugin(resolve: string): boolean {
+  const trimmed = resolve.replace(/\/+$/, "")
+  if (trimmed === PACKAGE_NAME || trimmed.endsWith(`/${PACKAGE_NAME}`)) {
+    return true
+  }
+  return (trimmed.startsWith(".") || path.isAbsolute(trimmed)) && packageNameAt(path.resolve(trimmed)) === PACKAGE_NAME
+}
+
 export function getPluginOptions(container: MedusaContainer): ManualTransferPluginOptions {
   const plugins = (configModule(container).plugins ?? []) as (string | { resolve: string; options?: unknown })[]
   for (const plugin of plugins) {
     const resolve = typeof plugin === "string" ? plugin : plugin.resolve
-    // Installed from npm, or linked by path in development
-    if (resolve === PACKAGE_NAME || resolve.replace(/\/+$/, "").endsWith(`/${PACKAGE_NAME}`)) {
+    if (typeof resolve === "string" && isThisPlugin(resolve)) {
       return (typeof plugin === "string" ? {} : (plugin.options as ManualTransferPluginOptions)) ?? {}
     }
   }
@@ -183,6 +216,10 @@ export function getSigningSecret(container: MedusaContainer): SigningSecret {
     )
   }
   return secret
+}
+
+export function getTrustedProxySecret(container: MedusaContainer): string | null {
+  return getPluginOptions(container).trustedProxySecret || process.env.MANUAL_TRANSFER_PROXY_SECRET || null
 }
 
 function businessDays(value: unknown, fallback: number): number {

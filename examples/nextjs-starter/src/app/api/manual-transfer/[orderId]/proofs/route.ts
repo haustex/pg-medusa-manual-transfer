@@ -1,8 +1,6 @@
-import { BACKEND_URL, backendHeaders, relay } from "@lib/manual-transfer/backend"
-import { NextRequest, NextResponse } from "next/server"
-
-/** A little above the backend's 5 MB, for the multipart framing */
-const MAX_BODY = 6 * 1024 * 1024
+import { backendConfig } from "@lib/manual-transfer/backend"
+import { forwardProof } from "@modules/manual-transfer/core/api"
+import { NextRequest } from "next/server"
 
 /**
  * Forwards the proof upload (multipart: `file`, optional `note`, and `token`
@@ -12,17 +10,5 @@ const MAX_BODY = 6 * 1024 * 1024
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params
-  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY) {
-    return NextResponse.json({ type: "invalid_data", message: "The file is larger than 5 MB" }, { status: 413 })
-  }
-  const form = await request.formData()
-  const token = form.get("token")
-  form.delete("token")
-  const response = await fetch(`${BACKEND_URL}/store/manual-transfer/orders/${encodeURIComponent(orderId)}/proofs`, {
-    method: "POST",
-    body: form,
-    headers: await backendHeaders(request, typeof token === "string" ? token : null),
-    cache: "no-store",
-  })
-  return relay(response, ["retry-after"])
+  return forwardProof(await backendConfig(), orderId, request)
 }

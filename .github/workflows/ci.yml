@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # release.yml runs the whole suite before publishing
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Medusa ${{ matrix.medusa }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2.19.0 is the lockfile's (lowest supported) version; 2.22.1 the latest tested
+        medusa: ["2.19.0", "2.22.1"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Use Medusa ${{ matrix.medusa }}
+        if: matrix.medusa != '2.19.0'
+        run: node scripts/use-medusa.mjs ${{ matrix.medusa }}
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build
+
+      - name: Package contents
+        run: node scripts/check-pack.mjs
+
+      # The same services and ports as the mt-spike-* containers of
+      # integration-tests/env.mjs; scripts/guard.mjs accepts nothing else.
+      - name: Start Postgres and Redis
+        run: |
+          docker run -d --name mt-spike-pg -e POSTGRES_PASSWORD=spike -e POSTGRES_DB=mt_spike \
+            -p 127.0.0.1:55433:5432 postgres:17-alpine
+          docker run -d --name mt-spike-redis -p 127.0.0.1:56380:6379 redis:7-alpine
+          for _ in $(seq 1 30); do
+            docker exec mt-spike-pg pg_isready -U postgres && break
+            sleep 1
+          done
+
+      - name: E2E setup
+        run: node integration-tests/setup.mjs --fresh
+
+      - name: E2E (shared, split, no-credit)
+        run: npm run test:e2e
+
+      - name: Logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-logs-${{ matrix.medusa }}
+          path: integration-tests/.state/logs
+          retention-days: 7

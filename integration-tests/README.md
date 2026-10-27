@@ -8,9 +8,9 @@ the runs produce (seed ids, logs, e-mails) goes to `integration-tests/.state/` (
 | `app/` | the test app: `medusa-config.ts` loads the plugin from this repository, the email-preview notification provider, `src/scripts/seed.ts`, `src/scripts/run-mt-job.ts` |
 | `setup.mjs` | links `app/node_modules`, (re)creates the database, migrates, seeds, creates the admin user; `--admin` builds the Admin |
 | `e2e/run.mjs` | the suite: `shared`, `split` (server 9400 + worker 9401) or `no-credit` (`showCredit: false`) |
-| `e2e/phase*.mjs` | checks per phase, sharing `e2e/context.mjs` |
+| `e2e/phase*.mjs`, `e2e/client-ip.mjs` | checks per phase, sharing `e2e/context.mjs`; `client-ip.mjs`: the buyer's IP only from `x-mt-client-ip` with the right `x-mt-proxy-secret`, forged headers ignored |
 | `ui.mjs` | Admin checks in Chromium: credit footer present / absent, `--shots <prefix>` screenshots, `--emails` e-mail screenshots |
-| `storefront.mjs` | the example storefront: the Medusa Next.js Starter at a pinned commit in `.state/nextjs-starter`, reset, set up with `examples/nextjs-starter/install.mjs`, built and served on 9410; guest checkout → instructions → proof upload → admin confirms in the Admin → "paid" page and e-mail, plus the e-mail link, a logged-in customer, the invoice PDF (accented name, read back with pdf.js) and the Admin's e-mail recipients with and without `adminEmails`. `--reuse` keeps the last starter build |
+| `storefront.mjs` | the example storefronts: the Medusa Next.js Starter (`.state/nextjs-starter`, port 9410) and the Medusa DTC Starter (`.state/dtc-starter`, `apps/storefront`, port 9420), each at a pinned commit, reset, set up with the example's `install.mjs`, built and served; guest checkout → instructions → proof upload → admin confirms in the Admin → "paid" page and e-mail, plus the e-mail link, a logged-in customer, the invoice PDF (accented name, read back with pdf.js) and the Admin's e-mail recipients with and without `adminEmails`; from the host, uploads through the storefront route count against the buyer's `X-Real-IP` and buyer-sent `x-mt-*` headers are dropped. `nextjs`, `dtc` or `all` (default); `--reuse` keeps the last builds |
 | `browser/` | the scripts that run inside the Playwright container |
 | `browser-run.mjs`, `env.mjs`, `processes.mjs` | the Playwright container; paths, ports, environment; starting and stopping medusa |
 
@@ -26,12 +26,13 @@ node integration-tests/setup.mjs --fresh   # once, or to start over
 npm run test:e2e                       # shared, split and no-credit
 node integration-tests/setup.mjs --admin   # after Admin changes, for ui.mjs
 node integration-tests/ui.mjs --shots phase4- --emails
-node integration-tests/storefront.mjs      # after setup.mjs --admin; screenshots in ~/shots/manual-transfer/storefront
+node integration-tests/storefront.mjs all  # after setup.mjs --admin; screenshots in ~/shots/manual-transfer/storefront[-dtc]
 ```
 
-The storefront runs at `http://localhost:9410` (not 127.0.0.1: the starter's middleware redirects to the host name
+The storefronts run at `http://localhost:9410` / `:9420` (not 127.0.0.1: the starter's middleware redirects to the host name
 Next.js reports, and the cart cookie follows it). The test app's `notifications.paymentUrl` points there
-(`MT_PAYMENT_URL` overrides it); `MT_NO_ADMIN_EMAILS=1` starts it without `adminEmails`. The run tops the test
+(`MT_PAYMENT_URL` overrides it; `storefront.mjs` sets it per starter); its `trustedProxySecret` is
+`mt-e2e-proxy-secret` (`MT_PROXY_SECRET`), which the storefronts get as `MANUAL_TRANSFER_PROXY_SECRET`; `MT_NO_ADMIN_EMAILS=1` starts it without `adminEmails`. The run tops the test
 product's stock up, since every order awaiting payment keeps its reservation.
 
 E-mails sent during a run land in `.state/emails` (set `MT_EMAIL_DIR` to put them elsewhere): one `.html`, `.txt`
@@ -47,4 +48,8 @@ The defaults in `env.mjs` match: database `mt_e2e` in `mt-spike-pg`. Screenshots
 and are written to `~/shots/manual-transfer` (`MT_SHOTS_DIR`).
 
 `MT_E2E_DATABASE_URL`, `MT_E2E_REDIS_URL` and `MT_PG_CONTAINER` (the container `psql` runs in) point the suite at
-other services, but `scripts/guard.mjs` still only accepts the ports above: CI (phase 6) needs its own setup.
+other services, but `scripts/guard.mjs` still only accepts the ports above. CI (`.github/workflows/ci.yml`) therefore
+starts containers with the same names and ports, then runs `setup.mjs --fresh` and `npm run test:e2e` for each Medusa
+version of the matrix (`scripts/use-medusa.mjs`). The browser checks (`ui.mjs`, `storefront.mjs`) run locally only.
+
+The plugin is found in `medusa-config` by its `package.json` name, so the checkout may live in a folder of any name.

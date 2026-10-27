@@ -6,9 +6,10 @@ import type {
 } from "@medusajs/framework/http"
 import { MathBN, MedusaError } from "@medusajs/framework/utils"
 import multer from "multer"
+import { clientIp } from "../lib/client-ip"
 import { OrderTransfer } from "../lib/order-transfer"
 import { ManualTransferStatus, receivedSoFar, UPLOADABLE_STATUSES } from "../lib/payment-data"
-import { getProofLimits, getSigningSecret } from "../lib/plugin-options"
+import { getProofLimits, getSigningSecret, getTrustedProxySecret } from "../lib/plugin-options"
 import { MAX_PROOF_BYTES } from "../lib/proof-file"
 import { RateLimiter } from "../lib/rate-limit"
 import { verifyUploadToken } from "../lib/tokens"
@@ -115,7 +116,11 @@ export function tooManyRequests(res: MedusaResponse, retryAfterSeconds: number, 
 
 const limiters = new Map<string, RateLimiter>()
 
-/** Per-IP limit for the public proof routes: uploads, reads, and cart → token exchanges, each counted apart */
+/**
+ * Per-IP limit for the public proof routes: uploads, reads, and cart → token
+ * exchanges, each counted apart. The IP is the connection's, or the one a
+ * storefront holding `trustedProxySecret` vouches for (src/lib/client-ip.ts).
+ */
 export function proofRateLimit(kind: "upload" | "read" | "token") {
   return (req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction) => {
     const limits = getProofLimits(req.scope)
@@ -131,7 +136,7 @@ export function proofRateLimit(kind: "upload" | "read" | "token") {
       limiter = new RateLimiter(limit, windowMs)
       limiters.set(id, limiter)
     }
-    const result = limiter.hit(req.ip ?? req.socket.remoteAddress ?? "unknown")
+    const result = limiter.hit(clientIp(req, getTrustedProxySecret(req.scope)))
     if (!result.allowed) {
       return tooManyRequests(res, result.retryAfterSeconds, "Too many requests, try again later")
     }

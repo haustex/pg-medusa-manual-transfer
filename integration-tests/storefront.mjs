@@ -1,15 +1,18 @@
-// The example storefront (examples/nextjs-starter) end to end: a pinned
-// checkout of the Medusa Next.js Starter in .state/nextjs-starter, reset and
-// set up with the example's install.mjs, built and served on 9410 against the
-// test app on 9400 (Admin build). Then, in Chromium (Playwright container):
-// guest checkout → payment instructions → proof upload → admin confirms in the
-// Admin → "paid" on the page and in the e-mail; the guest link from the
-// e-mail, a logged-in customer, the invoice PDF (accented name), and the
-// Admin's e-mail recipients with and without notifications.adminEmails.
+// The example storefronts (examples/nextjs-starter, examples/dtc-starter) end
+// to end. Each starter is a pinned checkout in .state/, reset and set up with
+// the example's install.mjs, built and served (Next.js Starter on 9410, DTC
+// Starter on 9420) against the test app on 9400 (Admin build). Then, in
+// Chromium (Playwright container): guest checkout → payment instructions →
+// proof upload → admin confirms in the Admin → "paid" on the page and in the
+// e-mail; the guest link from the e-mail, a logged-in customer, the invoice PDF
+// (accented name), the Admin's e-mail recipients with and without
+// notifications.adminEmails. From the host: the storefront passes the buyer's
+// IP (X-Real-IP) to the backend's per-IP limit with the proxy secret, and does
+// not pass on x-mt-* headers a buyer sends.
 //
-// Screenshots go to ~/shots/manual-transfer/storefront (MT_SHOTS_DIR/storefront).
-// Usage: node integration-tests/storefront.mjs [--shots <prefix>] [--reuse]
-//   --reuse  keep the starter build from the last run (no reset, install or next build)
+// Screenshots go to ~/shots/manual-transfer/storefront[-dtc] (MT_SHOTS_DIR).
+// Usage: node integration-tests/storefront.mjs [nextjs|dtc|all] [--shots <prefix>] [--reuse]
+//   --reuse  keep the starter builds from the last run (no reset, install or next build)
 // Needs `npm run build` and `node integration-tests/setup.mjs --admin` first.
 import { spawn, spawnSync } from "node:child_process"
 import fs from "node:fs"
@@ -22,26 +25,67 @@ import {
   BASE,
   PLUGIN_DIR,
   PROVIDER,
+  PROXY_SECRET,
   readState,
   SERVER_PORT,
   STATE_DIR,
-  STOREFRONT_PORT,
   writeState,
 } from "./env.mjs"
 import { startMedusa, stop, waitClosed, waitHealth } from "./processes.mjs"
 
-const STARTER_REPO = "https://github.com/medusajs/nextjs-starter-medusa"
-/** main as of 2026-04-23; the starter is deprecated upstream in favour of dtc-starter */
-const STARTER_COMMIT = "9818886f06e493cb2249733d114d339aa216ef00"
-const STARTER_DIR = path.join(STATE_DIR, "nextjs-starter")
+/**
+ * The starters, each at a pinned commit. `app` is the Next.js app inside the
+ * checkout; `backendUrlEnv` the variable its src/lib/config.ts reads.
+ */
+const STARTERS = {
+  nextjs: {
+    name: "Medusa Next.js Starter",
+    repo: "https://github.com/medusajs/nextjs-starter-medusa",
+    // main as of 2026-04-23; deprecated upstream in favour of dtc-starter
+    commit: "9818886f06e493cb2249733d114d339aa216ef00",
+    dir: path.join(STATE_DIR, "nextjs-starter"),
+    app: ".",
+    example: "nextjs-starter",
+    port: 9410,
+    backendUrlEnv: "MEDUSA_BACKEND_URL",
+    shots: "/shots/storefront",
+    install: (dir) => run("node", [".yarn/releases/yarn-4.12.0.cjs", "install", "--immutable"], { cwd: dir }),
+  },
+  dtc: {
+    name: "Medusa DTC Starter",
+    repo: "https://github.com/medusajs/dtc-starter",
+    // main as of 2026-10-26 (Medusa 2.22.1, Next.js 16.3)
+    commit: "6965d8ac4185740c521a2b26855258ea20817b8e",
+    dir: path.join(STATE_DIR, "dtc-starter"),
+    app: "apps/storefront",
+    example: "dtc-starter",
+    port: 9420,
+    backendUrlEnv: "NEXT_PUBLIC_MEDUSA_BACKEND_URL",
+    shots: "/shots/storefront-dtc",
+    install: (dir) =>
+      run("corepack", ["pnpm@10.11.1", "install", "--frozen-lockfile", "--filter", "@dtc/storefront"], {
+        cwd: dir,
+        env: { ...process.env, COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
+      }),
+  },
+}
+
 const SERVER_DIR = path.join(APP_DIR, ".medusa", "server")
 const EMAIL_DIR = path.join(STATE_DIR, "storefront-emails")
-// localhost, not 127.0.0.1: the starter's middleware redirects to the host name Next.js reports
-const SHOP = `http://localhost:${STOREFRONT_PORT}`
 
 const args = process.argv.slice(2)
 const shotsPrefix = args.includes("--shots") ? args[args.indexOf("--shots") + 1] ?? "" : ""
-const reuse = args.includes("--reuse") && fs.existsSync(path.join(STARTER_DIR, ".next", "BUILD_ID"))
+const which = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--shots") ?? "all"
+if (!["nextjs", "dtc", "all"].includes(which)) {
+  console.error("Usage: node integration-tests/storefront.mjs [nextjs|dtc|all] [--shots <prefix>] [--reuse]")
+  process.exit(1)
+}
+const selected = which === "all" ? Object.values(STARTERS) : [STARTERS[which]]
+
+const appDir = (starter) => path.join(starter.dir, starter.app)
+// localhost, not 127.0.0.1: the starters' middleware redirects to the host name Next.js reports
+const shopOf = (starter) => `http://localhost:${starter.port}`
+const reuseBuild = (starter) => args.includes("--reuse") && fs.existsSync(path.join(appDir(starter), ".next", "BUILD_ID"))
 
 function run(command, commandArgs, options = {}) {
   console.log(`> ${[command, ...commandArgs].join(" ")}`)
@@ -52,36 +96,38 @@ function run(command, commandArgs, options = {}) {
 }
 
 /** The starter at the pinned commit, reset to pristine, with the example installed */
-function prepareStarter() {
-  if (!fs.existsSync(path.join(STARTER_DIR, ".git"))) {
-    run("git", ["clone", "--quiet", STARTER_REPO, STARTER_DIR])
+function prepareStarter(starter) {
+  if (!fs.existsSync(path.join(starter.dir, ".git"))) {
+    run("git", ["clone", "--quiet", starter.repo, starter.dir])
   }
-  run("git", ["-C", STARTER_DIR, "checkout", "--quiet", "--force", STARTER_COMMIT])
-  run("git", ["-C", STARTER_DIR, "clean", "-fdq", "src"])
-  if (!fs.existsSync(path.join(STARTER_DIR, "node_modules", "next"))) {
-    run("node", [".yarn/releases/yarn-4.12.0.cjs", "install", "--immutable"], { cwd: STARTER_DIR })
+  run("git", ["-C", starter.dir, "checkout", "--quiet", "--force", starter.commit])
+  run("git", ["-C", starter.dir, "clean", "-fdq", path.join(starter.app, "src")])
+  if (!fs.existsSync(path.join(appDir(starter), "node_modules", "next"))) {
+    starter.install(starter.dir)
   }
-  run("node", [path.join(PLUGIN_DIR, "examples", "nextjs-starter", "install.mjs"), STARTER_DIR])
+  run("node", [path.join(PLUGIN_DIR, "examples", starter.example, "install.mjs"), appDir(starter)])
 }
 
-function starterEnv(seed) {
+function starterEnv(starter, seed) {
   return {
     ...process.env,
-    MEDUSA_BACKEND_URL: BASE,
+    [starter.backendUrlEnv]: BASE,
     NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: seed.publishable_key,
-    NEXT_PUBLIC_BASE_URL: SHOP,
+    NEXT_PUBLIC_BASE_URL: shopOf(starter),
     NEXT_PUBLIC_DEFAULT_REGION: "us",
     NEXT_TELEMETRY_DISABLED: "1",
+    // = the test app's trustedProxySecret: the buyer's IP reaches the backend's per-IP limits
+    MANUAL_TRANSFER_PROXY_SECRET: PROXY_SECRET,
   }
 }
 
 let storefront = null
 
-function startStorefront(seed) {
-  const out = fs.openSync(path.join(STATE_DIR, "logs", "storefront.log"), "w")
-  storefront = spawn("node", ["node_modules/next/dist/bin/next", "start", "-p", String(STOREFRONT_PORT), "-H", "127.0.0.1"], {
-    cwd: STARTER_DIR,
-    env: starterEnv(seed),
+function startStorefront(starter, seed) {
+  const out = fs.openSync(path.join(STATE_DIR, "logs", `storefront-${starter.example}.log`), "w")
+  storefront = spawn("node", ["node_modules/next/dist/bin/next", "start", "-p", String(starter.port), "-H", "127.0.0.1"], {
+    cwd: appDir(starter),
+    env: starterEnv(starter, seed),
     stdio: ["ignore", out, out],
     detached: true,
   })
@@ -150,14 +196,17 @@ async function restock(adminToken, seed) {
   if (updated.status !== 200) throw new Error(`restock: ${JSON.stringify(updated.json)}`)
 }
 
-/** A registered customer with an order placed by transfer through the store API */
-async function customerOrder(seed) {
-  const email = `customer-${Date.now()}@e2e.test`
-  const reg = await api("POST", "/auth/customer/emailpass/register", { body: { email, password: "e2e-password" } })
-  await api("POST", "/store/customers", { store: true, seed, token: reg.json.token, body: { email, first_name: "Siti", last_name: "Rahayu" } })
-  const { json: login } = await api("POST", "/auth/customer/emailpass", { body: { email, password: "e2e-password" } })
-  const s = (m, p, b) => api(m, p, { store: true, seed, token: login.token, body: b })
-  const { json: c } = await s("POST", "/store/carts", { region_id: seed.region_id })
+/** An order placed by transfer through the store API: a registered customer's, or a guest's with its upload token */
+async function storeOrder(seed, { guest = false } = {}) {
+  const email = `${guest ? "guest" : "customer"}-${Date.now()}@e2e.test`
+  let token = null
+  if (!guest) {
+    const reg = await api("POST", "/auth/customer/emailpass/register", { body: { email, password: "e2e-password" } })
+    await api("POST", "/store/customers", { store: true, seed, token: reg.json.token, body: { email, first_name: "Siti", last_name: "Rahayu" } })
+    token = (await api("POST", "/auth/customer/emailpass", { body: { email, password: "e2e-password" } })).json.token
+  }
+  const s = (m, p, b) => api(m, p, { store: true, seed, token, body: b })
+  const { json: c } = await s("POST", "/store/carts", { region_id: seed.region_id, ...(guest ? { email } : {}) })
   await s("POST", `/store/carts/${c.cart.id}/line-items`, { variant_id: seed.variant_id, quantity: 1 })
   await s("POST", `/store/carts/${c.cart.id}`, {
     shipping_address: { first_name: "Siti", last_name: "Rahayu", address_1: "1 Main St", city: "Austin", country_code: "us", postal_code: "78701" },
@@ -166,8 +215,51 @@ async function customerOrder(seed) {
   const { json: pc } = await s("POST", "/store/payment-collections", { cart_id: c.cart.id })
   await s("POST", `/store/payment-collections/${pc.payment_collection.id}/payment-sessions`, { provider_id: PROVIDER })
   const done = await s("POST", `/store/carts/${c.cart.id}/complete`)
-  if (!done.json.order?.id) throw new Error(`customer order: ${JSON.stringify(done.json)}`)
-  return { token: login.token, order_id: done.json.order.id }
+  if (!done.json.order?.id) throw new Error(`store order: ${JSON.stringify(done.json)}`)
+  if (guest) {
+    token = (await api("GET", `/store/manual-transfer/carts/${c.cart.id}/upload-token`, { store: true, seed })).json.token
+  }
+  return { token, order_id: done.json.order.id }
+}
+
+const GIF = Buffer.from("GIF89a\x01\x00\x01\x00\x00\x00\x00;", "latin1")
+
+/**
+ * Uploads through the storefront's route count against the buyer's IP (from
+ * X-Real-IP, as a proxy in front of the storefront sets it), not against the
+ * storefront server's; x-mt-* headers from the buyer are not passed on. The
+ * GIF is refused (400) once past the limiter, so nothing is stored. The test
+ * app allows 40 uploads per IP and 15 minutes.
+ */
+async function ipForwarding(starter, seed) {
+  let passed = 0
+  let failed = 0
+  const check = (name, ok, detail) => {
+    if (ok) passed++
+    else failed++
+    console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || detail === undefined ? "" : `\n      ${JSON.stringify(detail)}`}`)
+  }
+  const { order_id, token } = await storeOrder(seed, { guest: true })
+  const send = async (headers) => {
+    const form = new FormData()
+    form.append("file", new Blob([GIF]), "spam.gif")
+    form.append("token", token)
+    return (await fetch(`${shopOf(starter)}/api/manual-transfer/${order_id}/proofs`, { method: "POST", body: form, headers })).status
+  }
+  // Distinct per starter and run: the backend's limiter lives as long as its process
+  const net = `198.18.${starter.port % 256}`
+  const buyer = `${net}.${Date.now() % 200}`
+  let limitedAt = null
+  for (let i = 1; i <= 45 && limitedAt === null; i++) {
+    if ((await send({ "x-real-ip": buyer })) === 429) limitedAt = i
+  }
+  check(`${starter.example}: one buyer IP limited after 40 uploads through the storefront`, limitedAt === 41, limitedAt)
+  check(`${starter.example}: another buyer IP still uploads`, (await send({ "x-real-ip": `${net}.250` })) === 400)
+  const forged = await send({ "x-real-ip": buyer, "x-mt-client-ip": `${net}.251`, "x-mt-proxy-secret": "guess" })
+  check(`${starter.example}: buyer-sent x-mt-* headers are not passed on`, forged === 429, forged)
+  check(`${starter.example}: first X-Forwarded-For entry when there is no X-Real-IP`, (await send({ "x-forwarded-for": `${buyer}, 10.0.0.1` })) === 429)
+  console.log(`ip forwarding ${starter.example}: ${passed} passed, ${failed} failed`)
+  return failed === 0
 }
 
 async function withBackend(name, env, fn) {
@@ -185,41 +277,53 @@ async function withBackend(name, env, fn) {
   }
 }
 
+async function runStarter(starter, seed) {
+  const shop = shopOf(starter)
+  const reuse = reuseBuild(starter)
+  if (!reuse) prepareStarter(starter)
+  fs.rmSync(EMAIL_DIR, { recursive: true, force: true })
+  // The e-mails link to this starter's page
+  return withBackend(`storefront-backend-${starter.example}`, { MT_PAYMENT_URL: `${shop}/transfer/{order_id}?token={token}` }, async () => {
+    const { json: auth } = await api("POST", "/auth/user/emailpass", { body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
+    await ensureAccount(auth.token)
+    await restock(auth.token, seed)
+    writeState("storefront.json", { customer: await storeOrder(seed), publishable_key: seed.publishable_key })
+    // The starter pre-renders product pages from the backend at build time
+    if (!reuse) run("node", ["node_modules/next/dist/bin/next", "build"], { cwd: appDir(starter), env: starterEnv(starter, seed) })
+    startStorefront(starter, seed)
+    try {
+      await waitFor(`${shop}/us`)
+      console.log(`\n--- ${starter.name} (${shop})`)
+      const flowOk = inBrowser("storefront.mjs", ["flow", starter.shots, shotsPrefix, EMAIL_DIR, shop])
+      return (await ipForwarding(starter, seed)) && flowOk
+    } finally {
+      stopStorefront()
+    }
+  })
+}
+
 async function main() {
   if (!fs.existsSync(path.join(SERVER_DIR, "public", "admin"))) {
     throw new Error("No Admin build: run `node integration-tests/setup.mjs --admin` first")
   }
   const seed = readState("seed.json")
   ensureBrowserPackages()
-  if (!reuse) prepareStarter()
-  fs.rmSync(EMAIL_DIR, { recursive: true, force: true })
   fs.mkdirSync(path.join(STATE_DIR, "logs"), { recursive: true })
-  let ok = true
-
-  ok =
-    (await withBackend("storefront-backend", {}, async () => {
-      const { json: auth } = await api("POST", "/auth/user/emailpass", { body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
-      await ensureAccount(auth.token)
-      await restock(auth.token, seed)
-      writeState("storefront.json", { customer: await customerOrder(seed), publishable_key: seed.publishable_key })
-      // The starter pre-renders product pages from the backend at build time
-      if (!reuse) run("node", ["node_modules/next/dist/bin/next", "build"], { cwd: STARTER_DIR, env: starterEnv(seed) })
-      startStorefront(seed)
-      try {
-        await waitFor(`${SHOP}/us`)
-        return inBrowser("storefront.mjs", ["flow", "/shots/storefront", shotsPrefix, EMAIL_DIR])
-      } finally {
-        stopStorefront()
-      }
-    })) && ok
+  const results = {}
+  for (const starter of selected) {
+    results[starter.example] = await runStarter(starter, seed)
+  }
 
   // Without notifications.adminEmails the settings page names the fallback recipients
-  ok =
-    (await withBackend("storefront-backend-fallback", { MT_NO_ADMIN_EMAILS: "1" }, async () =>
-      inBrowser("storefront.mjs", ["settings-fallback", "/shots/storefront", shotsPrefix])
-    )) && ok
+  const shop = shopOf(selected[0])
+  results["settings-fallback"] = await withBackend(
+    "storefront-backend-fallback",
+    { MT_NO_ADMIN_EMAILS: "1", MT_PAYMENT_URL: `${shop}/transfer/{order_id}?token={token}` },
+    async () => inBrowser("storefront.mjs", ["settings-fallback", selected[0].shots, shotsPrefix, "", shop])
+  )
 
-  console.log(ok ? "storefront: all passed" : "storefront: FAILED")
+  const ok = Object.values(results).every(Boolean)
+  console.log(`storefront: ${Object.entries(results).map(([k, v]) => `${k} ${v ? "passed" : "FAILED"}`).join(", ")}`)
   process.exitCode = ok ? 0 : 1
 }
 

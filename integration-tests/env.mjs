@@ -34,6 +34,8 @@ export const BASE = `http://127.0.0.1:${SERVER_PORT}`
 export const ADMIN_EMAIL = "admin@e2e.test"
 export const ADMIN_PASSWORD = "e2e-password"
 export const PROVIDER = "pp_manual-transfer_manual-transfer"
+/** trustedProxySecret of the test app: the example storefronts send it with the buyer's IP */
+export const PROXY_SECRET = process.env.MT_PROXY_SECRET || "mt-e2e-proxy-secret"
 
 /** Where the email-preview notification provider writes every message it "sends" */
 export const EMAIL_DIR = process.env.MT_EMAIL_DIR ?? path.join(STATE_DIR, "emails")

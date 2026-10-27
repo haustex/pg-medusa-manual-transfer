@@ -1,0 +1,67 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **Security problems: please do not file them here**, see SECURITY.md.
+        Never paste real bank account numbers, upload tokens, secrets or customer data.
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: medusa
+    attributes:
+      label: Medusa version
+      placeholder: "2.22.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Payment provider / checkout
+        - Proof upload
+        - Admin (queue, widget, settings)
+        - E-mails / invoice
+        - Jobs (reminder, auto-cancel, retention)
+        - Storefront example (Next.js Starter)
+        - Storefront example (DTC Starter)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Worker mode
+      options:
+        - shared (one process)
+        - server + worker
+        - not sure
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Plugin options and logs
+      description: The plugin and provider options from medusa-config (without secrets) and relevant log lines.
+      render: text

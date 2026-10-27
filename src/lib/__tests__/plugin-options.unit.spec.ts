@@ -1,3 +1,4 @@
+import path from "node:path"
 import {
   DEFAULT_PROOF_LIMITS,
   getDeadlineOptions,
@@ -5,6 +6,7 @@ import {
   getProofLimits,
   getProofRetentionDays,
   getSigningSecret,
+  getTrustedProxySecret,
 } from "../plugin-options"
 
 function container(config: Record<string, unknown>) {
@@ -18,6 +20,10 @@ describe("plugin options", () => {
     expect(getPluginOptions(container({ plugins: ["x", { resolve: "/srv/medusa-payment-manual-transfer/", options }] }))).toBe(options)
     expect(getPluginOptions(container({ plugins: [{ resolve: "medusa-payment-manual-transfer-extra", options }] }))).toEqual({})
     expect(getPluginOptions(container({}))).toEqual({})
+    // A checkout under another folder name, recognised by its package.json
+    const checkout = path.resolve(__dirname, "../../..")
+    expect(getPluginOptions(container({ plugins: [{ resolve: checkout, options }] }))).toBe(options)
+    expect(getPluginOptions(container({ plugins: [{ resolve: path.join(checkout, "src"), options }] }))).toEqual({})
   })
 
   it("merges proof limits over the defaults", () => {
@@ -74,5 +80,22 @@ describe("getSigningSecret", () => {
   it("refuses to run without any secret", () => {
     delete process.env.MANUAL_TRANSFER_SECRET
     expect(() => getSigningSecret(container({ projectConfig: { http: {} } }))).toThrow(/MANUAL_TRANSFER_SECRET/)
+  })
+})
+
+describe("getTrustedProxySecret", () => {
+  const env = process.env.MANUAL_TRANSFER_PROXY_SECRET
+  afterEach(() => {
+    process.env.MANUAL_TRANSFER_PROXY_SECRET = env
+    if (env === undefined) delete process.env.MANUAL_TRANSFER_PROXY_SECRET
+  })
+
+  it("is off by default, then MANUAL_TRANSFER_PROXY_SECRET, the plugin option first", () => {
+    delete process.env.MANUAL_TRANSFER_PROXY_SECRET
+    expect(getTrustedProxySecret(container({}))).toBeNull()
+    process.env.MANUAL_TRANSFER_PROXY_SECRET = "env"
+    expect(getTrustedProxySecret(container({}))).toBe("env")
+    const withOption = container({ plugins: [{ resolve: "medusa-payment-manual-transfer", options: { trustedProxySecret: "opt" } }] })
+    expect(getTrustedProxySecret(withOption)).toBe("opt")
   })
 })

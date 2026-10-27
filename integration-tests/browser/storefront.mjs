@@ -1,18 +1,17 @@
-// The example storefront in Chromium, against the storefront on 9410 and the
-// test app (with the Admin) on 9400. Runs inside the Playwright container (see
-// ../storefront.mjs).
+// An example storefront in Chromium, against the storefront (9410: Next.js
+// Starter, 9420: DTC Starter) and the test app (with the Admin) on 9400. Runs
+// inside the Playwright container (see ../storefront.mjs).
 //
-// Usage: node storefront.mjs flow <outDir> <prefix> <emailDir>
-//        node storefront.mjs settings-fallback <outDir> <prefix>
+// Usage: node storefront.mjs flow <outDir> <prefix> <emailDir> <storefront URL>
+//        node storefront.mjs settings-fallback <outDir> <prefix> "" <storefront URL>
 import { chromium } from "playwright-core"
 import fs from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 
 const require = createRequire(import.meta.url)
-const SHOP = "http://localhost:9410"
 const ADMIN = "http://127.0.0.1:9400"
-const [MODE, OUT, PREFIX = "", EMAIL_DIR] = process.argv.slice(2)
+const [MODE, OUT, PREFIX = "", EMAIL_DIR, SHOP = "http://localhost:9410"] = process.argv.slice(2)
 const STATE = path.resolve(new URL("../.state/", import.meta.url).pathname)
 const BUYER = { first: "José", last: "Müller-Ñúñez", email: `jose-${Date.now()}@e2e.test` }
 

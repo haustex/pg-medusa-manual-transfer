@@ -4,7 +4,13 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
 
 > Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
-**Status:** in development (phase 5 of 6: payment provider, bank accounts, payment-proof upload, admin verification, e-mails, pro-forma invoice and storefront example). Coming soon to hauskayu.com.
+**Status:** 0.1.0, ready for a first release; tested on Medusa 2.19 and 2.22. Coming soon to hauskayu.com.
+
+[![CI](https://github.com/haustex/pg-medusa-manual-transfer/actions/workflows/ci.yml/badge.svg)](https://github.com/haustex/pg-medusa-manual-transfer/actions/workflows/ci.yml)
+
+| Payment page (storefront) | Verification in the Admin |
+| --- | --- |
+| ![Payment instructions on the storefront](docs/screenshots/storefront-instructions.png) | ![Confirming a transfer in the Admin](docs/screenshots/admin-confirm.png) |
 
 [English](#english) · [Bahasa Indonesia](#bahasa-indonesia)
 
@@ -12,7 +18,7 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
 
 ## English
 
-### What it does (so far)
+### What it does
 
 - **Bank accounts managed in the Admin** (Settings → Manual transfer): bank name, account holder, account
   number, SWIFT/BIC, bank address, currency, regions, active/inactive, order. Several accounts can be active; the
@@ -59,9 +65,10 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
   replaced. Set in an embedded Noto Sans (open license, Latin subset), so names like "José Müller-Ñúñez" keep their
   accents; `invoice.fontPath` uses your store's font instead.
 - The e-mails and the invoice carry **your store's identity only** (Settings → Manual transfer → Store details).
-- **Storefront example** for the Medusa Next.js Starter (`examples/nextjs-starter`, in the npm package): payment
+- **Storefront pages** for the Medusa DTC Starter and the Medusa Next.js Starter (in the npm package): payment
   instructions with copy buttons, exact amount, reference, countdown, the "fees: OUR" note and the invoice download,
-  plus the proof upload with its status. English and Indonesian. See [Storefront](#storefront).
+  plus the proof upload with its status. English and Indonesian. A starter-independent core (React + Fetch) makes
+  other storefronts easy. See [Storefront](#storefront).
 
 ### Install
 
@@ -79,6 +86,7 @@ module.exports = defineConfig({
       resolve: "medusa-payment-manual-transfer",
       options: {
         // secret: "…",           // signs guest upload tokens and proof links; default MANUAL_TRANSFER_SECRET, then http.jwtSecret
+        // trustedProxySecret: "…", // the storefront sends the buyer's IP with it; default MANUAL_TRANSFER_PROXY_SECRET
         showCredit: true,          // the small plugin credit under the plugin's Admin pages
         proofRetentionDays: null,  // e.g. 365: delete proof files that long after the order was paid or canceled
         reminderHours: 24,         // reminder event this many hours before the deadline
@@ -211,19 +219,44 @@ folder (`.html`, `.txt`, `.json` and the attachments) instead of sending it. For
 
 ### Storefront
 
-`examples/nextjs-starter` (part of the npm package) adds the buyer's pages to the
-[Medusa Next.js Starter](https://github.com/medusajs/nextjs-starter-medusa):
+The npm package holds the buyer's pages for both Medusa starters, in English and Indonesian:
+
+| Starter | Install |
+| --- | --- |
+| [Medusa DTC Starter](https://github.com/medusajs/dtc-starter) (current) | `node node_modules/medusa-payment-manual-transfer/examples/dtc-starter/install.mjs <repo>/apps/storefront` |
+| [Medusa Next.js Starter](https://github.com/medusajs/nextjs-starter-medusa) (deprecated upstream) | `node node_modules/medusa-payment-manual-transfer/examples/nextjs-starter/install.mjs <storefront>` |
+
+Each installer copies the **core** (`src/storefront` of the package: React components, Fetch API helpers, labels,
+no dependency on a starter) to `src/modules/manual-transfer/core/`, adds the example's thin, starter-specific layer
+(page, two route handlers, the place-order button) and makes four small, checked edits (payment method name,
+place-order button, order-page link, no "paid at" for unpaid transfers). Placing an order leads to
+`/{countryCode}/transfer/{orderId}`: status, exact amount, bank details and reference with copy buttons, deadline with
+countdown, the "choose OUR" note, the invoice download and the proof upload. Guests get there with the upload token,
+logged-in customers with their session. Set `notifications.paymentUrl` to
+`https://<storefront>/transfer/{order_id}?token={token}` so the e-mails link to the same page.
+
+Another storefront? Use the core directly: [src/storefront/README.md](src/storefront/README.md). Details per starter:
+[examples/dtc-starter/README.md](examples/dtc-starter/README.md),
+[examples/nextjs-starter/README.md](examples/nextjs-starter/README.md).
+
+### The buyer's IP behind a storefront
+
+Uploads, status reads and token exchanges are limited per IP. Behind a storefront every request comes from the
+storefront's server, so the examples send the buyer's IP in `x-mt-client-ip` together with a shared secret in
+`x-mt-proxy-secret`. The backend uses that header **only when the secret matches**; otherwise it counts the IP of
+the connection. `X-Forwarded-For` is never read: Medusa sets Express' `trust proxy` to 1, so anyone reaching the
+backend directly could pick their own IP with it.
 
 ```bash
-node node_modules/medusa-payment-manual-transfer/examples/nextjs-starter/install.mjs ../your-storefront
+openssl rand -hex 32
+# Medusa .env                                  # storefront .env (server-side only, never NEXT_PUBLIC_*)
+MANUAL_TRANSFER_PROXY_SECRET=<value>           MANUAL_TRANSFER_PROXY_SECRET=<same value>
 ```
 
-It copies the pages and makes four small, checked edits to the starter (payment method name, place-order button,
-order-page link, no "paid at" for unpaid transfers). Placing an order leads to `/{countryCode}/transfer/{orderId}`:
-status, exact amount, bank details and reference with copy buttons, deadline with countdown, the "choose OUR" note, the
-invoice download and the proof upload. Guests get there with the upload token, logged-in customers with their session.
-Set `notifications.paymentUrl` to `https://<storefront>/transfer/{order_id}?token={token}` so the e-mails link to the
-same page. Details, the list of edits and porting notes: [examples/nextjs-starter/README.md](examples/nextjs-starter/README.md).
+(or the plugin option `trustedProxySecret`). The storefront takes the buyer's IP from `X-Real-IP`, then the first
+`X-Forwarded-For` entry, so the proxy in front of the storefront must set them (Vercel does; nginx:
+`proxy_set_header X-Real-IP $remote_addr;`). Without the secret all storefront traffic shares one IP budget: raise
+`proofUploads.perIp` then. A reverse proxy in front of Medusa can send the two headers itself, too.
 
 ### Signing secret (production)
 
@@ -307,8 +340,8 @@ bearer) or anyone holding the order's upload token (`x-manual-transfer-token` he
 Anyone else gets `404`. Too many requests get `429` with `Retry-After`. Upload tokens are HMAC-derived from the order
 id, so the e-mails can always rebuild the link (`{token}` in `paymentUrl`); they only work while the payment accepts proofs.
 
-The per-IP limit is kept in memory per server process; the per-order limit is counted in the database. Behind a
-reverse proxy, make sure Express sees the client IP (`trust proxy`). Run several server instances? Use a shared
+The per-IP limit is kept in memory per server process; the per-order limit is counted in the database. Which IP
+counts: see [The buyer's IP behind a storefront](#the-buyers-ip-behind-a-storefront). Run several server instances? Use a shared
 locking provider (e.g. `@medusajs/medusa/locking-redis`), since proof uploads, rejections and confirmations lock the
 payment.
 
@@ -328,9 +361,12 @@ Events for notifications: `manual_transfer.proof_uploaded` and `manual_transfer.
 
 ### Development
 
-`integration-tests/` holds the E2E suite, the test app and the storefront run (`storefront.mjs`: the example installed in
-a pinned starter checkout, checkout to "paid" in Chromium): see [integration-tests/README.md](integration-tests/README.md).
+`integration-tests/` holds the E2E suite, the test app and the storefront run (`storefront.mjs`: both examples
+installed in pinned starter checkouts, checkout to "paid" in Chromium): see
+[integration-tests/README.md](integration-tests/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 `npm run email:preview -- <dir>` renders every e-mail and the invoice with a made-up order, without Medusa.
+Changes: [CHANGELOG.md](CHANGELOG.md). Security reports: [SECURITY.md](SECURITY.md). More screenshots:
+[docs/screenshots](docs/screenshots).
 
 ### Roadmap
 
@@ -343,7 +379,7 @@ a pinned starter checkout, checkout to "paid" in Chromium): see [integration-tes
 
 ## Bahasa Indonesia
 
-### Fitur (sejauh ini)
+### Fitur
 
 - **Rekening bank dikelola dari Admin** (Settings → Manual transfer): nama bank, nama penerima, nomor rekening,
   SWIFT/BIC, alamat bank, mata uang, region, aktif/nonaktif, urutan. Rekening aktif pertama yang cocok dengan mata
@@ -395,12 +431,14 @@ a pinned starter checkout, checkout to "paid" in Chromium): see [integration-tes
 - **Penerima email admin**: isi `notifications.adminEmails` (disarankan). Kalau kosong, semua user Admin menerimanya;
   plugin menulis peringatan di log dan **Settings → Manual transfer → Notifikasi email** menampilkan siapa saja
   penerimanya saat ini serta `paymentUrl` yang dipakai di email pembeli.
-- **Contoh storefront** untuk Medusa Next.js Starter (`examples/nextjs-starter`, ikut paket npm): halaman instruksi
+- **Halaman storefront** untuk Medusa DTC Starter dan Medusa Next.js Starter (ikut paket npm): halaman instruksi
   (detail rekening dengan tombol salin, nominal persis, kode referensi, hitung mundur, catatan biaya OUR, unduh invoice)
-  dan upload bukti dengan statusnya, teks EN + ID. Pasang dengan
-  `node node_modules/medusa-payment-manual-transfer/examples/nextjs-starter/install.mjs ../storefront-anda`, lalu isi
-  `notifications.paymentUrl` dengan `https://<storefront>/transfer/{order_id}?token={token}`. Detail:
-  [examples/nextjs-starter/README.md](examples/nextjs-starter/README.md).
+  dan upload bukti dengan statusnya, teks EN + ID. Intinya (`src/storefront`: komponen React, fungsi API, label) tidak
+  bergantung starter. Pasang dengan
+  `node node_modules/medusa-payment-manual-transfer/examples/dtc-starter/install.mjs <repo>/apps/storefront` (atau
+  `examples/nextjs-starter/install.mjs`), lalu isi `notifications.paymentUrl` dengan
+  `https://<storefront>/transfer/{order_id}?token={token}`. Detail:
+  [examples/dtc-starter/README.md](examples/dtc-starter/README.md).
 - Email dan invoice **hanya memakai identitas toko Anda** (Settings → Manual transfer → Detail toko). Menu
   **Pratinjau** di sana membuka setiap email dan invoice dengan order contoh.
 - **Tes email tanpa provider asli**: provider `medusa-payment-manual-transfer/providers/email-preview` menulis setiap
@@ -409,6 +447,11 @@ a pinned starter checkout, checkout to "paid" in Chromium): see [integration-tes
 **Secret produksi**: buat dengan `openssl rand -hex 32` lalu isi `MANUAL_TRANSFER_SECRET` di `.env`. Tanpa itu plugin
 memakai `http.jwtSecret` (cukup untuk development). Mengganti secret membatalkan semua token upload dan link bukti
 yang sudah terkirim.
+
+**IP pembeli di balik storefront**: batas per IP memakai header `x-mt-client-ip` dari storefront **hanya kalau**
+`x-mt-proxy-secret` cocok dengan `MANUAL_TRANSFER_PROXY_SECRET` (atau opsi `trustedProxySecret`); selain itu IP koneksi.
+`X-Forwarded-For` tidak pernah dibaca. Isi secret yang sama di `.env` server storefront (jangan `NEXT_PUBLIC_*`), dan
+pastikan proxy di depan storefront mengisi `X-Real-IP`.
 
 **Lock**: plugin memakai Locking Module Medusa dari container. Provider default-nya in-memory (hanya satu proses);
 kalau server dan worker dipisah, pakai `@medusajs/medusa/locking-redis` atau `locking-postgres` (contoh di bagian
