@@ -5,6 +5,13 @@ All notable changes to `medusa-payment-manual-transfer`. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - unreleased
+
+### Changed
+
+- Published from GitHub Actions with npm provenance (0.1.0 was published by hand). No code changes.
+- README: screenshots linked by absolute URL so they show on npmjs.com.
+
 ## [0.1.0] - 2026-10-27
 
 First public release. Works with Medusa `^2.19.0`, tested on 2.19.0 and 2.22.1.
@@ -60,4 +67,5 @@ First public release. Works with Medusa `^2.19.0`, tested on 2.19.0 and 2.22.1.
   (Medusa DTC Starter). Payment page with copy buttons, exact amount, reference, countdown, "fees: OUR" note, invoice
   download, proof upload and status.
 
+[0.1.1]: https://github.com/haustex/pg-medusa-manual-transfer/releases/tag/v0.1.1
 [0.1.0]: https://github.com/haustex/pg-medusa-manual-transfer/releases/tag/v0.1.0

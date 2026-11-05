@@ -10,7 +10,7 @@ Manual bank transfer with payment-proof upload and admin verification for Medusa
 
 | Payment page (storefront) | Verification in the Admin |
 | --- | --- |
-| ![Payment instructions on the storefront](docs/screenshots/storefront-instructions.png) | ![Confirming a transfer in the Admin](docs/screenshots/admin-confirm.png) |
+| ![Payment instructions on the storefront](https://raw.githubusercontent.com/haustex/pg-medusa-manual-transfer/main/docs/screenshots/storefront-instructions.png) | ![Confirming a transfer in the Admin](https://raw.githubusercontent.com/haustex/pg-medusa-manual-transfer/main/docs/screenshots/admin-confirm.png) |
 
 [English](#english) · [Bahasa Indonesia](#bahasa-indonesia)
 
@@ -366,7 +366,7 @@ installed in pinned starter checkouts, checkout to "paid" in Chromium): see
 [integration-tests/README.md](integration-tests/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 `npm run email:preview -- <dir>` renders every e-mail and the invoice with a made-up order, without Medusa.
 Changes: [CHANGELOG.md](CHANGELOG.md). Security reports: [SECURITY.md](SECURITY.md). More screenshots:
-[docs/screenshots](docs/screenshots).
+[docs/screenshots](https://github.com/haustex/pg-medusa-manual-transfer/tree/main/docs/screenshots).
 
 ### Roadmap
 
