@@ -19,6 +19,7 @@ import {
   MEDUSA_BIN,
   PLUGIN_DIR,
   psql,
+  waitForPostgres,
   STATE_DIR,
 } from "./env.mjs"
 
@@ -54,6 +55,7 @@ if (!fs.existsSync(path.join(PLUGIN_DIR, ".medusa/server/src/providers/manual-tr
 
 linkNodeModules(path.join(APP_DIR, "node_modules"))
 fs.mkdirSync(STATE_DIR, { recursive: true })
+await waitForPostgres()
 
 if (args.has("--fresh")) {
   if (!/^mt_[a-z0-9_]+$/.test(DB_NAME)) {

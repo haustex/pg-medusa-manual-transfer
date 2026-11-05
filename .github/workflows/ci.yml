@@ -51,13 +51,18 @@ jobs:
       # integration-tests/env.mjs; scripts/guard.mjs accepts nothing else.
       - name: Start Postgres and Redis
         run: |
+          # Healthy only once the final server answers over TCP (the image's init server is socket-only and restarts)
           docker run -d --name mt-spike-pg -e POSTGRES_PASSWORD=spike -e POSTGRES_DB=mt_spike \
+            --health-cmd "pg_isready -h 127.0.0.1 -U postgres" --health-interval 1s --health-timeout 5s --health-retries 60 \
             -p 127.0.0.1:55433:5432 postgres:17-alpine
           docker run -d --name mt-spike-redis -p 127.0.0.1:56380:6379 redis:7-alpine
-          for _ in $(seq 1 30); do
-            docker exec mt-spike-pg pg_isready -U postgres && break
+          for _ in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' mt-spike-pg)" = healthy ] && exit 0
             sleep 1
           done
+          echo "::error::Postgres container mt-spike-pg not healthy after 60 s"
+          docker logs mt-spike-pg | tail -30
+          exit 1
 
       - name: E2E setup
         run: node integration-tests/setup.mjs --fresh

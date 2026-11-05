@@ -62,10 +62,14 @@ export function writeState(name, value) {
   fs.writeFileSync(path.join(STATE_DIR, name), JSON.stringify(value, null, 2))
 }
 
-/** psql inside the Postgres container; { ok, out } */
+/**
+ * psql inside the Postgres container, over TCP (127.0.0.1): a fresh postgres image first runs a temporary,
+ * socket-only init server and restarts, so socket connections can hit the server that is about to go away.
+ * { ok, out }
+ */
 export function psql(sql, db = DB_NAME) {
   try {
-    const out = execFileSync("docker", ["exec", PG_CONTAINER, "psql", "-U", "postgres", "-d", db, "-tAc", sql], {
+    const out = execFileSync("docker", ["exec", PG_CONTAINER, "psql", "-h", "127.0.0.1", "-U", "postgres", "-d", db, "-tAc", sql], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     })
@@ -73,4 +77,20 @@ export function psql(sql, db = DB_NAME) {
   } catch (e) {
     return { ok: false, out: String(e.stderr || e.message) }
   }
+}
+
+/** Waits until the container's final Postgres server answers over TCP, at most `seconds` (default 60) */
+export async function waitForPostgres(seconds = 60) {
+  const started = Date.now()
+  let last = ""
+  while (Date.now() - started < seconds * 1000) {
+    const r = psql("select 1", "postgres")
+    if (r.ok && r.out === "1") return
+    last = r.out
+    await new Promise((res) => setTimeout(res, 1000))
+  }
+  throw new Error(
+    `Postgres container "${PG_CONTAINER}" not ready after ${seconds} s (last: ${last.trim() || "no answer"}). ` +
+      "Start it as in integration-tests/README.md, or set MT_PG_CONTAINER."
+  )
 }
