@@ -5,7 +5,25 @@ All notable changes to `medusa-payment-manual-transfer`. The format follows
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-11-06
+## [0.1.2] - 2026-11-06
+
+First version published from GitHub Actions with npm provenance (0.1.0 was published by hand). Contains 0.1.1.
+
+### Fixed
+
+- E2E "tampered signature -> 403" was flaky (about 1 run in 64): it replaced the signature's first character by `A`,
+  which changed nothing when the signature already started with `A`. The test now always alters the signature
+  (first and middle character, one flipped bit), and unit tests check 200 random tampered tokens and signatures each.
+
+### Changed
+
+- Upload tokens and signed proof URLs are accepted only in the canonical form we issue (43 base64url characters,
+  decode and encode give the same text) before the constant-time comparison. The exact string comparison already
+  refused the other forms; this makes it explicit and tested.
+
+## [0.1.1] - 2026-11-06 (not published)
+
+The release run stopped on the flaky test above, so 0.1.1 never reached npm; use 0.1.2.
 
 ### Changed
 
@@ -67,5 +85,6 @@ First public release. Works with Medusa `^2.19.0`, tested on 2.19.0 and 2.22.1.
   (Medusa DTC Starter). Payment page with copy buttons, exact amount, reference, countdown, "fees: OUR" note, invoice
   download, proof upload and status.
 
+[0.1.2]: https://github.com/haustex/pg-medusa-manual-transfer/releases/tag/v0.1.2
 [0.1.1]: https://github.com/haustex/pg-medusa-manual-transfer/releases/tag/v0.1.1
 [0.1.0]: https://github.com/haustex/pg-medusa-manual-transfer/releases/tag/v0.1.0

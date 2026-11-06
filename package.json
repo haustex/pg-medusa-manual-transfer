@@ -1,6 +1,6 @@
 {
   "name": "medusa-payment-manual-transfer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Manual bank transfer with payment-proof upload and admin verification for Medusa v2 — by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",

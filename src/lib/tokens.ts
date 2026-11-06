@@ -19,9 +19,22 @@ function hmac(secret: SigningSecret, message: string): string {
   return createHmac("sha256", secret).update(message).digest("base64url")
 }
 
-function safeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a)
-  const right = Buffer.from(b)
+/**
+ * A token as we issue it: base64url of 32 bytes, no padding, canonical. The last of the 43 characters carries only
+ * 4 bits, so several characters decode to the same bytes; only the one we produce is accepted (decode → encode must
+ * give the input back). The comparison below is on the strings anyway, this makes it explicit.
+ */
+function isCanonicalToken(value: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/.test(value) && Buffer.from(value, "base64url").toString("base64url") === value
+}
+
+/** Constant-time comparison of the expected token with a canonical candidate */
+function safeEqual(expected: string, candidate: string): boolean {
+  if (!isCanonicalToken(candidate)) {
+    return false
+  }
+  const left = Buffer.from(expected)
+  const right = Buffer.from(candidate)
   return left.length === right.length && timingSafeEqual(left, right)
 }
 

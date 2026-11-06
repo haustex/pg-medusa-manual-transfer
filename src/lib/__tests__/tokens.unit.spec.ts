@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto"
 import { PROOF_URL_TTL_SECONDS, signProofPath, uploadToken, verifyProofSignature, verifyUploadToken } from "../tokens"
 
 const SECRET = "test-secret"
@@ -67,5 +68,73 @@ describe("signed proof links", () => {
     expect(verifyProofSignature(SECRET, "mtproof_1", undefined, "x", now)).toBe(false)
     expect(verifyProofSignature(SECRET, "mtproof_1", "1e12", "x", now)).toBe(false)
     expect(verifyProofSignature(SECRET, "mtproof_1", ["1"], "x", now)).toBe(false)
+  })
+})
+
+describe("tampered tokens and signatures (200 random cases each)", () => {
+  const now = new Date("2026-10-26T00:00:00Z")
+  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+  const otherChar = (c: string, k: number) => {
+    const i = ALPHABET.indexOf(c)
+    return ALPHABET[(i + 1 + (k % 63)) % 64]
+  }
+  const replaceAt = (s: string, i: number, c: string) => s.slice(0, i) + c + s.slice(i + 1)
+  /** Every way of breaking a valid token: always a different string */
+  function variants(token: string, k: number): string[] {
+    const bytes = Buffer.from(token, "base64url")
+    const flipped = Buffer.from(bytes)
+    flipped[16] ^= 1 << (k % 8)
+    // last character with other padding bits: same bytes, non-canonical text
+    const last = token.at(-1)!
+    const sameBytes = ALPHABET.split("").filter(
+      (c) => c !== last && Buffer.from(token.slice(0, -1) + c, "base64url").equals(bytes)
+    )
+    const out = [
+      flipped.toString("base64url"),
+      replaceAt(token, 0, otherChar(token[0], k)),
+      replaceAt(token, 21, otherChar(token[21], k)),
+      replaceAt(token, 42, otherChar(token[42], k)),
+      ...sameBytes.map((c) => token.slice(0, -1) + c),
+      token.slice(0, -1),
+      token + "A",
+      token + "=",
+    ]
+    for (const v of out) {
+      expect(v).not.toBe(token)
+    }
+    return out
+  }
+
+  it("upload tokens", () => {
+    for (let k = 0; k < 200; k++) {
+      const secret = randomBytes(32)
+      const order = `order_${randomBytes(6).toString("hex")}`
+      const token = uploadToken(secret, order)
+      expect(verifyUploadToken(secret, order, token)).toBe(true)
+      for (const bad of variants(token, k)) {
+        expect(verifyUploadToken(secret, order, bad)).toBe(false)
+      }
+    }
+  })
+
+  it("proof signatures", () => {
+    for (let k = 0; k < 200; k++) {
+      const secret = randomBytes(32)
+      const proof = `mtproof_${randomBytes(6).toString("hex")}`
+      const url = new URL(signProofPath(secret, proof, now).path, "http://x")
+      const expires = url.searchParams.get("expires")!
+      const signature = url.searchParams.get("signature")!
+      expect(verifyProofSignature(secret, proof, expires, signature, now)).toBe(true)
+      for (const bad of variants(signature, k)) {
+        expect(verifyProofSignature(secret, proof, expires, bad, now)).toBe(false)
+      }
+    }
+  })
+
+  it("the non-canonical last character really decodes to the same bytes (the case the format check is for)", () => {
+    const token = uploadToken("test-secret", "order_1")
+    const bytes = Buffer.from(token, "base64url")
+    const twins = ALPHABET.split("").filter((c) => c !== token.at(-1) && Buffer.from(token.slice(0, -1) + c, "base64url").equals(bytes))
+    expect(twins).toHaveLength(3)
   })
 })

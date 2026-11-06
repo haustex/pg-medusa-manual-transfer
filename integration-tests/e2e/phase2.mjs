@@ -102,8 +102,22 @@ export async function phase2(ctx) {
   const fileBytes = Buffer.from(await file.arrayBuffer())
   check("signed URL serves the exact file", file.status === 200 && fileBytes.equals(PNG) && file.headers.get("content-type") === "image/png", { status: file.status, len: fileBytes.length })
   check("file served with nosniff, no-store and sandbox CSP", file.headers.get("x-content-type-options") === "nosniff" && /no-store/.test(file.headers.get("cache-control")) && /sandbox/.test(file.headers.get("content-security-policy") ?? ""), Object.fromEntries(file.headers))
-  const tampered = await fetch(BASE + signed.json.url.replace(/signature=./, "signature=A"))
-  check("tampered signature -> 403", tampered.status === 403, tampered.status)
+  // Every tampered form differs from the real signature (replacing the first character by a fixed "A" was a no-op
+  // whenever the signature already started with "A": 1 in 64 runs passed the real signature and got 200)
+  const sigUrl = new URL(signed.json.url, BASE)
+  const realSig = sigUrl.searchParams.get("signature")
+  const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+  const swap = (s, i) => s.slice(0, i) + ALPHA[(ALPHA.indexOf(s[i]) + 1) % 64] + s.slice(i + 1)
+  const sigBytes = Buffer.from(realSig, "base64url")
+  sigBytes[16] ^= 0x01
+  const tamperedSigs = [swap(realSig, 0), swap(realSig, 21), sigBytes.toString("base64url")]
+  const tamperedStatuses = []
+  for (const bad of tamperedSigs) {
+    const u = new URL(sigUrl)
+    u.searchParams.set("signature", bad)
+    tamperedStatuses.push((await fetch(u)).status)
+  }
+  check("tampered signature -> 403", tamperedSigs.every((s) => s !== realSig) && tamperedStatuses.every((s) => s === 403), tamperedStatuses)
   const unsigned = await fetch(`${BASE}/manual-transfer/proofs/${proofA.id}/file`)
   check("unsigned file request -> 403", unsigned.status === 403, unsigned.status)
   const expired = await fetch(BASE + signed.json.url.replace(/expires=\d+/, `expires=${Math.floor(Date.now() / 1000) - 10}`))
