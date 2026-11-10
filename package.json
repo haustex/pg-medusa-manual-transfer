@@ -1,7 +1,7 @@
 {
   "name": "medusa-payment-manual-transfer",
-  "version": "0.1.2",
-  "description": "Manual bank transfer with payment-proof upload and admin verification for Medusa v2 — by Haus Kayu",
+  "version": "0.1.3",
+  "description": "Manual bank transfer payment provider for Medusa v2: bank accounts in the Admin, unique reference and deadline per order, payment-proof upload, admin verification, e-mails and pro-forma invoice — by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
   "homepage": "https://github.com/haustex/pg-medusa-manual-transfer#readme",
@@ -44,9 +44,12 @@
     "medusa-plugin",
     "medusa-plugin-integration",
     "medusa-plugin-payment",
+    "payment",
     "bank-transfer",
+    "wire-transfer",
     "manual-payment",
     "payment-proof",
+    "invoice",
     "indonesia",
     "usd"
   ],

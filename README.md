@@ -1,12 +1,59 @@
-# PG Medusa Transfer Manual by Haus Kayu
+<p align="center">
+  <a href="https://hauskayu.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+      <img src="docs/logo.svg" alt="Haus Kayu" width="260">
+    </picture>
+  </a>
+</p>
 
-Manual bank transfer with payment-proof upload and admin verification for Medusa v2.
+# medusa-payment-manual-transfer
 
-> Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
+**Manual bank transfer for Medusa v2: bank accounts managed in the Admin, unique payment reference and deadline per
+order, payment-proof upload, admin verification, e-mails and a pro-forma invoice.** Built and used in production by
+Haus Kayu.
+<br>Terima transfer bank dengan upload bukti dan verifikasi di Admin Medusa. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
-**Status:** 0.1.0, ready for a first release; tested on Medusa 2.19 and 2.22. Coming soon to hauskayu.com.
-
+[![npm](https://img.shields.io/npm/v/medusa-payment-manual-transfer)](https://www.npmjs.com/package/medusa-payment-manual-transfer)
 [![CI](https://github.com/haustex/pg-medusa-manual-transfer/actions/workflows/ci.yml/badge.svg)](https://github.com/haustex/pg-medusa-manual-transfer/actions/workflows/ci.yml)
+[![Medusa](https://img.shields.io/badge/Medusa-2.19%20%E2%80%93%202.22-7c3aed)](https://medusajs.com)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+### Compatibility
+
+| Plugin | Medusa | Node | Tested in CI on |
+| --- | --- | --- | --- |
+| 0.1.x | 2.19.0 or newer 2.x (`^2.19.0`) | 20.19+ or 22.12+ | Medusa 2.19.0 and 2.22.1 |
+
+### Quick start
+
+```bash
+npm install medusa-payment-manual-transfer
+npx medusa db:migrate
+```
+
+```ts
+// medusa-config.ts
+plugins: [{ resolve: "medusa-payment-manual-transfer", options: {} }],
+modules: [
+  {
+    resolve: "@medusajs/medusa/payment",
+    options: {
+      providers: [
+        {
+          resolve: "medusa-payment-manual-transfer/providers/manual-transfer",
+          id: "manual-transfer",
+          options: { referencePrefix: "MT", deadlineBusinessDays: 3, timezone: "Asia/Jakarta" },
+        },
+      ],
+    },
+  },
+],
+```
+
+Enable `pp_manual-transfer_manual-transfer` on your regions and add a bank account in **Settings → Manual transfer**.
+Every option, the e-mails and the storefront pieces: [Install](#install) · [E-mails](#e-mails-and-the-pro-forma-invoice) ·
+[Storefront](#storefront).
 
 | Payment page (storefront) | Verification in the Admin |
 | --- | --- |

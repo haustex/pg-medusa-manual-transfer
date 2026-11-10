@@ -5,6 +5,15 @@ All notable changes to `medusa-payment-manual-transfer`. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-10
+
+### Changed
+
+- npm metadata and README only, no code changes: refined `description` and `keywords` for the Medusa Integrations
+  listing (`medusa-v2`, `medusa-plugin-integration`, `medusa-plugin-payment`), Haus Kayu logo, npm badge,
+  compatibility table and quick start at the top of the README; the stale "ready for a first release" status line
+  is gone.
+
 ## [0.1.2] - 2026-11-06
 
 First version published from GitHub Actions with npm provenance (0.1.0 was published by hand). Contains 0.1.1.
