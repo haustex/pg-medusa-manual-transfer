@@ -544,6 +544,21 @@ teak tools and furniture from Jepara, Indonesia.
 - E-mail: [dev@hauskayu.com](mailto:dev@hauskayu.com)
 - WhatsApp: [chat with us](https://wa.me/6285111663330?text=Halo%20Haus%20Kayu%2C%20saya%20mau%20tanya%20soal%20PG%20Medusa%20Transfer%20Manual)
 
+## Sponsors
+
+This plugin is free and MIT licensed, maintained by a small furniture workshop in Jepara, Indonesia. If it saves you
+time, [sponsor Haus Kayu on GitHub](https://github.com/sponsors/haustex).
+<br>Plugin ini gratis (MIT) dan dirawat oleh workshop furnitur kecil di Jepara. Kalau plugin ini menghemat waktumu,
+[dukung Haus Kayu lewat GitHub Sponsors](https://github.com/sponsors/haustex).
+
+### Business sponsors
+
+_Your logo here. [Become a Business sponsor](https://github.com/sponsors/haustex) ($50/month)._
+
+### Backers
+
+_Your name here. [Become a Backer](https://github.com/sponsors/haustex) ($10/month)._
+
 ## License
 
 MIT © Haus Kayu
